@@ -1,0 +1,11 @@
+services:
+  postgres:
+    image: postgres
+    restart: always
+    ports:
+      - 5432:5432
+    volumes:
+      - ./migrations/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: WisHBrAdhOtalMaNOste
