@@ -4,7 +4,7 @@ use chrono::DateTime;
 use chrono::offset::Utc;
 use serde;
 
-use crate::database::{DbConnection, DbError, DbFilter, DB_DEPLOY_LOG_TABLE, DB_DATABASE_NAME};
+use crate::database::{DbConnection, DbError, DbFilter, DB_DEPLOY_LOG_TABLE};
 
 #[allow(dead_code)]
 pub enum DeployState {
@@ -124,10 +124,10 @@ pub async fn db_filter_for_deploy_log(
             start_time,
             end_time
         FROM 
-            {db}.{table_name}
+            {table_name}
         WHERE 
             {filter_statement}
-        ", db=DB_DATABASE_NAME, table_name=DB_DEPLOY_LOG_TABLE, filter_statement=filter_statement);
+        ", table_name=DB_DEPLOY_LOG_TABLE, filter_statement=filter_statement);
 
         if limit != -1 {
             query.push_str("LIMIT $1")
@@ -150,7 +150,7 @@ pub async fn db_insert_deploy_log(db_connection: &DbConnection, deploy_log: &Dep
         return Err(DbError::ConnectionAlreadyClosed);
     } else {
         let query = format!("
-        INSERT INTO {db}.{table_name} (
+        INSERT INTO {table_name} (
             challenge_id,
             state,
             start_time,
@@ -162,7 +162,7 @@ pub async fn db_insert_deploy_log(db_connection: &DbConnection, deploy_log: &Dep
                 $2,
                 $3,
                 $4,
-            );", db=DB_DATABASE_NAME, table_name=DB_DEPLOY_LOG_TABLE);
+            );", table_name=DB_DEPLOY_LOG_TABLE);
             let result: PgQueryResult = sqlx::query(&query[..])
             .bind(deploy_log.challenge_id())
             .bind(deploy_log.raw_state())
@@ -181,7 +181,7 @@ pub async fn db_delete_deploy_log(db_connection: &DbConnection, deploy_log_id: i
     if db_connection.is_closed() {
         return Err(DbError::ConnectionAlreadyClosed);
     } else {
-        let query = format!("DELETE FROM {db}.{table_name} WHERE id = $1", db=DB_DATABASE_NAME, table_name=DB_DEPLOY_LOG_TABLE);
+        let query = format!("DELETE FROM {table_name} WHERE id = $1", table_name=DB_DEPLOY_LOG_TABLE);
             let result: PgQueryResult = sqlx::query(&query[..])
             .bind(deploy_log_id)
             .execute(&db_connection.pool).await.unwrap();

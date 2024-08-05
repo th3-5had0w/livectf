@@ -94,19 +94,61 @@ pub fn success(msg: &str) -> HttpResponse {
     return resp;
 }
 
-pub async fn index() -> ActixResult<Markup> {
+pub async fn login() -> ActixResult<Markup> {
     Ok(html! {
         html {
-            body {
-                h1 { "Login please" }
-                form {
-                    input name="username" type="text" {}
-                    input name="password" type="password" {}
-                    input name="login" type="submit" {}
+            head {
+                link rel="stylesheet" href="/static/css/styles.css" {}
+                link rel="stylesheet" href="/static/css/login/styles.css" {}
+                meta charset="utf-8" {}
+                title {
+                    "CoSGang livectf"
                 }
             }
+            body {
+                div class="container" {
+                    img src="/static/img/cosgang.jpg" id="cosgang-avt" {}
+                    div class="form-login-container" {
+                        h1 { "Login" }
+                        form action="/api/login" method="POST" {
+                            input name="username" type="text" placeholder="Username..." {}
+                            input name="password" type="password" placeholder="Password..." {}
+                            input name="login" type="submit" value="Login" {}
+                        }
+                    }
+                }
+            }
+            script src="/static/js/login.js" {}
         }
     })
 }
 
-
+pub async fn register() -> ActixResult<Markup> {
+    Ok(html! {
+        html {
+            head {
+                link rel="stylesheet" href="/static/css/styles.css" {}
+                link rel="stylesheet" href="/static/css/register/styles.css" {}
+                meta charset="utf-8" {}
+                title {
+                    "CoSGang livectf"
+                }
+            }
+            body {
+                div class="container" {
+                    img src="/static/img/cosgang.jpg" id="cosgang-avt" {}
+                    div class="form-reg-container" {
+                        h1 { "Register" }
+                        form action="/api/register" method="POST" {
+                            input name="email" type="text" placeholder="Email..." {}
+                            input name="username" type="text" placeholder="Username..." {}
+                            input name="password" type="password" placeholder="Password..." {}
+                            input name="register" type="submit" value="Register" {}
+                        }
+                    }
+                }
+            }
+            script src="/static/js/register.js" {}
+        }
+    })
+}

@@ -5,7 +5,7 @@ use chrono::offset::Utc;
 use bcrypt::{verify as bcrypt_verify, hash as bcrypt_hash};
 use serde;
     
-use crate::database::{DbConnection, DbFilter, DB_USER_TABLE, DB_DATABASE_NAME};
+use crate::database::{DbConnection, DbFilter, DB_USER_TABLE};
 
 #[derive(FromRow, Decode, serde::Deserialize, serde::Serialize, Debug)]
 pub struct UserInstance {
@@ -198,9 +198,9 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
         lock_due_at,
         is_admin
     FROM 
-        {db}.{table_name}
+        {table_name}
     {filter_statement}
-    ", db=DB_DATABASE_NAME, table_name=DB_USER_TABLE, filter_statement=filter_statement);
+    ", table_name=DB_USER_TABLE, filter_statement=filter_statement);
 
     if limit == -1 {
         query.push_str("LIMIT $1");
@@ -219,7 +219,7 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
 pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> Result<bool, sqlx::Error> {
 
     let query = format!("
-    UPDATE {db}.{table_name} 
+    UPDATE {table_name} 
     SET 
         (
             username,
@@ -242,7 +242,7 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
             $7,
         )
     WHERE id = $8
-    ", db=DB_DATABASE_NAME, table_name=DB_USER_TABLE);
+    ", table_name=DB_USER_TABLE);
     let result: PgQueryResult = sqlx::query(&query[..])
         .bind(user.username())
         .bind(bcrypt_hash(user.password(), 6).unwrap())
@@ -262,7 +262,7 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
 }
 
 pub async fn db_delete_user(db_connection: &DbConnection, user_id: i32) -> Result<bool, sqlx::Error> {
-    let query = format!("DELETE FROM {db}.{table_name} WHERE id = $1", db=DB_DATABASE_NAME, table_name=DB_USER_TABLE);
+    let query = format!("DELETE FROM {table_name} WHERE id = $1", table_name=DB_USER_TABLE);
     let result: PgQueryResult = sqlx::query(&query[..])
         .bind(user_id)
         .execute(&db_connection.pool).await.unwrap();
@@ -286,10 +286,9 @@ pub async fn db_user_login(db_connection: &DbConnection, username: &str, passwor
         lock_due_at,
         is_admin
     FROM 
-        {db}.{table_name}
+        {table_name}
     WHERE 
-        username=$1;", 
-        db=DB_DATABASE_NAME,
+        username=$1;",
         table_name=DB_USER_TABLE
     );
 
@@ -311,7 +310,7 @@ pub async fn db_user_login(db_connection: &DbConnection, username: &str, passwor
 
 pub async fn db_user_register(db_connection: &DbConnection, user: UserInstance) -> Result<bool, sqlx::Error> {
     let query = format!("
-    INSERT INTO {db}.{table_name} (
+    INSERT INTO {table_name} (
         username,
         password,
         email,
@@ -331,7 +330,7 @@ pub async fn db_user_register(db_connection: &DbConnection, user: UserInstance) 
             $6,
             $7,
             $8
-        );", db=DB_DATABASE_NAME, table_name=DB_USER_TABLE);
+        );", table_name=DB_USER_TABLE);
         let result: PgQueryResult = sqlx::query(&query[..])
         .bind(user.username().trim())
         .bind(bcrypt_hash(user.password(), 6).unwrap())

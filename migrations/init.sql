@@ -1,7 +1,8 @@
 CREATE DATABASE livectf;
-CREATE SCHEMA livectf;
 
-CREATE TABLE livectf.deploy_log (
+\c livectf;
+
+CREATE TABLE deploy_log (
     id SERIAL PRIMARY KEY,
     challenge_id INTEGER,
     state INTEGER,
@@ -9,7 +10,7 @@ CREATE TABLE livectf.deploy_log (
     end_time BIGINT
 );
 
-CREATE TABLE livectf.users (
+CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username TEXT UNIQUE,
     password TEXT,
@@ -21,7 +22,7 @@ CREATE TABLE livectf.users (
     is_admin BOOLEAN
 );
 
-CREATE TABLE livectf.solve_history (
+CREATE TABLE solve_history (
     id SERIAL PRIMARY KEY,
     user_id INTEGER,
     is_success BOOLEAN,

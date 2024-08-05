@@ -3,7 +3,7 @@ use sqlx::{FromRow, Decode};
 use chrono::DateTime;
 use chrono::offset::Utc;
 
-use crate::database::{DbConnection, DbError, DbFilter, DB_SOLVE_HISTORY_TABLE, DB_DATABASE_NAME};
+use crate::database::{DbConnection, DbError, DbFilter, DB_SOLVE_HISTORY_TABLE};
 
 #[derive(FromRow, Decode, serde::Deserialize, serde::Serialize)]
 pub struct SolveHistoryEntry {
@@ -66,7 +66,7 @@ pub async fn db_save_solve_result(db_connection: &DbConnection, solve_entry: Sol
     }
 
     let query = format!("
-    INSERT INTO {db}.{table_name} (
+    INSERT INTO {table_name} (
         user_id,
         is_success,
         time,
@@ -78,7 +78,7 @@ pub async fn db_save_solve_result(db_connection: &DbConnection, solve_entry: Sol
             $2,
             $3,
             $4
-        );", db=DB_DATABASE_NAME, table_name=DB_SOLVE_HISTORY_TABLE);
+        );", table_name=DB_SOLVE_HISTORY_TABLE);
 
         let result: PgQueryResult = sqlx::query(&query[..])
         .bind(solve_entry.user_id())
