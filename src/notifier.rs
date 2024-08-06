@@ -45,20 +45,58 @@ impl Notifier {
 pub fn craft_type_notify_message<T: Display>(target_module: &String, args: &[T]) -> Vec<u8> {
     let mut data: HashMap<&str, String> = HashMap::new();
     match target_module.as_str() {
+
         "deployer" => {
             data.insert("cmd", args[0].to_string());
-            data.insert("challenge_filename", args[1].to_string());
+            match args[0].to_string().as_str() {
+
+                "schedule" => {
+                    data.insert("challenge_filename", args[1].to_string());
+                    data.insert("start_time", args[2].to_string());
+                    data.insert("end_time", args[3].to_string());
+                },
+
+                "deploy" => {
+                    data.insert("challenge_filename", args[1].to_string());
+                },
+
+                "destroy" => {
+                    data.insert("challenge_filename", args[1].to_string());
+                },
+
+                _ => panic!("unknown command")
+
+            }
             let serialized_data = serde_json::to_vec(&data).expect("failed converting data");
             return serialized_data;
         },
+
+
         "flag_receiver" => {
             data.insert("cmd", args[0].to_string());
-            data.insert("challenge_filename", args[1].to_string());
-            data.insert("flag", args[2].to_string());
-            data.insert("submit_by", args[3].to_string());
+            match args[0].to_string().as_str() {
+
+                "flag_submit" => {
+                    data.insert("flag", args[1].to_string());
+                    data.insert("submit_by", args[2].to_string());        
+                },
+
+                "flag_info" => {
+                    data.insert("challenge_filename", args[1].to_string());
+                    data.insert("flag", args[2].to_string());        
+                },
+
+                "cleanup" => {
+                    data.insert("challenge_filename", args[1].to_string());
+                },
+
+                _ => panic!("unknown command")
+            }
             let serialized_data = serde_json::to_vec(&data).expect("failed converting data");
             return serialized_data;
         },
+
+
         "database" => {
             data.insert("cmd", args[0].to_string());
             data.insert("sender", args[1].to_string());
@@ -66,6 +104,8 @@ pub fn craft_type_notify_message<T: Display>(target_module: &String, args: &[T])
             let serialized_data = serde_json::to_vec(&data).expect("failed converting data");
             return serialized_data;
         },
+
+
         "database_response" => {
             data.insert("data", args[0].to_string());
             data.insert("type", "response".to_string());
@@ -73,6 +113,8 @@ pub fn craft_type_notify_message<T: Display>(target_module: &String, args: &[T])
             let serialized_data = serde_json::to_vec(&data).expect("failed converting data");
             return serialized_data;
         },
+
+
         "database_error" => {
             data.insert("data", args[0].to_string());
             data.insert("type", "error".to_string());
@@ -80,6 +122,26 @@ pub fn craft_type_notify_message<T: Display>(target_module: &String, args: &[T])
             let serialized_data = serde_json::to_vec(&data).expect("failed converting data");
             return serialized_data;
         },
+
+
+        "timer" => {
+            data.insert("cmd", args[0].to_string());
+            match args[0].to_string().as_str() {
+
+                "enqueue" => {
+                    data.insert("challenge_name", args[0].to_string());
+                    data.insert("start_time", args[1].to_string());
+                    data.insert("end_time", args[2].to_string());
+                },
+
+                _ => {
+                    panic!("unknown command");
+                }
+            }
+            let serialized_data = serde_json::to_vec(&data).expect("failed converting data");
+            return serialized_data;
+        },
+
         _ => {
             panic!("unknown module.");
         }

@@ -46,10 +46,13 @@ fn flag_receiver_loop(mut ctx: FlagReceiverCtx) {
         println!("flag received recv()");
         let data = deserialize_data(&serialized_data);
         match data.get("cmd").expect("missing cmd").as_str() {
+
             "flag_info" => cmd_flag_info(&mut ctx, &data),
-            "flag_submit" => {
-                cmd_flag_submit(&mut ctx, &data);
-            },
+
+            "flag_submit" => cmd_flag_submit(&mut ctx, &data),
+
+            "cleanup" => cmd_cleanup(&mut ctx, &data),
+
             _ => panic!("unknown cmd")
         };
     }
@@ -73,10 +76,10 @@ pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path
     let submitted_flag = &path.0;
     
     let target_module = String::from_str("flag_receiver").unwrap();
-    let data = craft_type_notify_message(&target_module, &["flag_submit", "", submitted_flag, user_id]);
+    let data = craft_type_notify_message(&target_module, &["flag_submit", submitted_flag, user_id]);
 
     slaves.notify(target_module, data);
-    return Ok(HttpResponse::Ok().body(format!("File uploaded successfully: {}", "d")));
+    return Ok(HttpResponse::Ok().body(format!("flag submitted successfully")));
 }
 
 fn cmd_flag_info(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
@@ -89,7 +92,6 @@ fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
     let submitted_flag = data.get("flag").expect("missing flag").to_string();
     let user_id = data.get("submit_by").expect("missing user_id").to_string();
     if ctx.challenge_infos.contains_key(&submitted_flag) {
-        // dung flag
         let solve_history = SolveHistoryEntry::new(
             user_id.parse::<i32>().expect("user_id must be of type `i32`"),
             true,
@@ -103,7 +105,6 @@ fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
         rt.block_on(ctx.db_conn.log_solve_result(solve_history));
         
     } else {
-        // sai flag 
         let solve_history = SolveHistoryEntry::new(
             user_id.parse::<i32>().expect("user_id must be of type `i32`"),
             false,
@@ -115,4 +116,9 @@ fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
         let rt = Runtime::new().expect("failed creating tokio runtime");
         rt.block_on(ctx.db_conn.log_solve_result(solve_history));
     }
+}
+
+fn cmd_cleanup(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
+    let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename").to_string();
+    let lmao =  ctx.challenge_infos.remove(&challenge_filename).expect(&format!("no challenge to cleanup: {}", challenge_filename));
 }
