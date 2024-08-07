@@ -355,3 +355,11 @@ pub async fn db_user_create(db_connection: &DbConnection, user_to_create: UserIn
     return Ok(result);
 
 }
+
+pub async fn db_get_all_user(db_connection: &DbConnection) -> Vec<UserInstance> {
+    let result: Vec<UserInstance> = sqlx::query_as("SELECT * FROM users;")  
+        .fetch_all(&db_connection.pool).await
+        .unwrap_or(Vec::<UserInstance>::new());
+
+    return result;
+}

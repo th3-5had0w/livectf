@@ -1,5 +1,5 @@
 // use std::{sync::{mpsc::{self, Receiver, Sender}, Arc}, thread::spawn};
-use actix_web::{Result as ActixResult, HttpResponse, http::header::ContentType};
+use actix_web::{Result as ActixResult, HttpResponse, http::header::ContentType, web};
 use maud::{html, Markup};
 use jwt::{SignWithKey, VerifyWithKey, Error as JWT_Error};
 use hmac::{Hmac, Mac};
@@ -9,12 +9,19 @@ use sha2::Sha256;
 // use futures_util::lock::Mutex;
 // use uuid::Uuid;
 
+use crate::database::{DbConnection};
+
 pub mod user;
 
 #[derive(serde::Serialize)]
 pub struct JsonResponse {
     is_error: bool,
     message: String
+}
+
+#[derive(serde::Deserialize)]
+pub struct PaginationQuery {
+    path: Option<String>
 }
 
 // pub async fn not_found() -> Result<HttpResponse, actix_web::Error> {
@@ -99,7 +106,7 @@ pub async fn login() -> ActixResult<Markup> {
         html {
             head {
                 link rel="stylesheet" href="/static/css/styles.css" {}
-                link rel="stylesheet" href="/static/css/login/styles.css" {}
+                link rel="stylesheet" href="/static/css/styles_login.css" {}
                 meta charset="utf-8" {}
                 title {
                     "CoSGang livectf"
@@ -128,7 +135,7 @@ pub async fn register() -> ActixResult<Markup> {
         html {
             head {
                 link rel="stylesheet" href="/static/css/styles.css" {}
-                link rel="stylesheet" href="/static/css/register/styles.css" {}
+                link rel="stylesheet" href="/static/css/styles_register.css" {}
                 meta charset="utf-8" {}
                 title {
                     "CoSGang livectf"
@@ -149,6 +156,113 @@ pub async fn register() -> ActixResult<Markup> {
                 }
             }
             script src="/static/js/register.js" {}
+        }
+    })
+}
+
+pub async fn not_found() -> ActixResult<Markup> {
+    Ok(html! {
+        html {
+            head {
+                link rel="stylesheet" href="/static/css/styles.css" {}
+                link rel="stylesheet" href="/static/css/styles_404.css" {}
+                meta charset="utf-8" {}
+                title {
+                    "CoSGang livectf"
+                }
+            }
+            body {
+                div class="container" {
+                    img src="/static/img/cosgang.jpg" id="cosgang-avt" {}
+                    h1 { "Lost? Let our sheeps take you home" }
+                    a href="/" { "< Back" }
+                }
+            }
+        }
+    })
+}
+
+pub async fn index() -> ActixResult<Markup> {
+    Ok(html! {
+        html {
+            head {
+                link rel="stylesheet" href="/static/css/styles.css" {}
+                link rel="stylesheet" href="/static/css/styles_index.css" {}
+                meta charset="utf-8" {}
+                title {
+                    "CoSGang livectf"
+                }
+            }
+            body {
+                div class="container" {
+                    img src="/static/img/cosgang.jpg" id="cosgang-avt" {}
+                    h1 { "Under construction! Stay turned hackers." }
+                }
+            }
+        }
+    })
+}
+
+pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<DbConnection>) -> ActixResult<Markup> {
+    let path = page.path.clone().unwrap_or(String::from("/"));
+    let mut users: Vec<UserInstance> = vec![];
+    if path == "users" {
+        users = db_conn.get_all_user().await;
+    }
+    Ok(html! {
+        html {
+            head {
+                link rel="stylesheet" href="/static/css/styles.css" {}
+                link rel="stylesheet" href="/static/css/styles_sheep_center.css" {}
+                meta charset="utf-8" {}
+                title {
+                    "CoSGang livectf - Dashboard"
+                }
+            }
+            body {
+                div class="container" {
+                    div class="wrapper" {
+                        div class="menu-wrapper" {
+                            a href="/sheep_center?path=users" { "Users management" }
+                            a href="/sheep_center?path=challenges" { "Challenges" }
+                            a href="/sheep_center?path=logs" { "View logs" }
+                        }
+    
+                        div class="main-section" {
+                            @if path == "users" {
+                                h1 id="section-title" { "User management" }
+                                div class="section-wrapper" {
+                                    table class="user-table" {
+                                        tr {
+                                            th { "ID" }
+                                            th { "Username" }
+                                            th { "Email" }
+                                            th { "Role" }
+                                            th { "Solved" }
+                                            th { "Locked" }
+                                        }
+                                        @for user in users {
+                                            tr {
+                                                td { (user.id()) }
+                                                td { (user.username()) }
+                                                td { (user.email()) }
+                                                @if user.is_admin() {
+                                                    td { "admin" }
+                                                } @else {
+                                                    td { "user" }
+                                                }
+                                                td { (user.challenge_solved()) }
+                                                td { (user.is_locked()) }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            script src="/static/js/sheep_center.js" {}
         }
     })
 }

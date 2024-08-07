@@ -166,6 +166,10 @@ impl DbConnection {
         user::db_delete_user(&self, user_id).await.unwrap_or(false)
     }
 
+    pub async fn get_all_user(&self) -> Vec<user::UserInstance> {
+        user::db_get_all_user(&self).await
+    }
+
     pub async fn fetch_recent_solve_log(&self, limit: u32) -> Vec<solve_history::SolveHistoryEntry> {
         let filter_none: DbFilter<solve_history::SolveHistoryEntry> = DbFilter::<solve_history::SolveHistoryEntry> {
             filter_instance: solve_history::SolveHistoryEntry::get_empty_solve_history_entry(),
