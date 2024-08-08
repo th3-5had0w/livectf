@@ -83,42 +83,45 @@ pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path
 }
 
 fn cmd_flag_info(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
-    let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename").to_string();
+    let challenge_name = data.get("challenge_name").expect("missing challenge_name").to_string();
     let flag = data.get("flag").expect("missing flag").to_string();
-    ctx.challenge_infos.insert(flag, challenge_filename);
+    ctx.challenge_infos.insert(challenge_name, flag);
 }
 
 fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
     let submitted_flag = data.get("flag").expect("missing flag").to_string();
     let user_id = data.get("submit_by").expect("missing user_id").to_string();
-    if ctx.challenge_infos.contains_key(&submitted_flag) {
-        let solve_history = SolveHistoryEntry::new(
-            user_id.parse::<i32>().expect("user_id must be of type `i32`"),
-            true,
-            submitted_flag
-        );
+    let rt = Runtime::new().expect("failed creating tokio runtime");
 
-        println!("saving history");
-        let db = ctx.db_conn.clone();
+    todo!("Add challenge name into solving record");
+    for (challenge_name, flag) in &ctx.challenge_infos {
+        if &submitted_flag == flag {
+            let solve_history = SolveHistoryEntry::new(
+                user_id.parse::<i32>().expect("user_id must be of type `i32`"),
+                true,
+                submitted_flag
+            );
+    
+            println!("saving history");
+            let db = ctx.db_conn.clone();
 
-        let rt = Runtime::new().expect("failed creating tokio runtime");
-        rt.block_on(ctx.db_conn.log_solve_result(solve_history));
-        
-    } else {
-        let solve_history = SolveHistoryEntry::new(
-            user_id.parse::<i32>().expect("user_id must be of type `i32`"),
-            false,
-            submitted_flag
-        );
-
-        println!("saving history");
-
-        let rt = Runtime::new().expect("failed creating tokio runtime");
-        rt.block_on(ctx.db_conn.log_solve_result(solve_history));
+            rt.block_on(ctx.db_conn.log_solve_result(solve_history));    
+            return;
+        }
     }
+
+    let solve_history = SolveHistoryEntry::new(
+        user_id.parse::<i32>().expect("user_id must be of type `i32`"),
+        false,
+        submitted_flag
+    );
+
+    println!("saving history");
+
+    rt.block_on(ctx.db_conn.log_solve_result(solve_history));
 }
 
 fn cmd_cleanup(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
-    let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename").to_string();
-    let lmao =  ctx.challenge_infos.remove(&challenge_filename).expect(&format!("no challenge to cleanup: {}", challenge_filename));
+    let challenge_name = data.get("challenge_name").expect("missing challenge_name").to_string();
+    ctx.challenge_infos.remove(&challenge_name).expect(&format!("no challenge to cleanup: {}", challenge_name));
 }

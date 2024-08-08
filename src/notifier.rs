@@ -82,12 +82,12 @@ pub fn craft_type_notify_message<T: Display>(target_module: &String, args: &[T])
                 },
 
                 "flag_info" => {
-                    data.insert("challenge_filename", args[1].to_string());
+                    data.insert("challenge_name", args[1].to_string());
                     data.insert("flag", args[2].to_string());        
                 },
 
                 "cleanup" => {
-                    data.insert("challenge_filename", args[1].to_string());
+                    data.insert("challenge_name", args[1].to_string());
                 },
 
                 _ => panic!("unknown command")
