@@ -61,7 +61,7 @@ async fn webserver_loop(slaves: NotifierComms, db_conn: database::DbConnection) 
             .route("/api/user/{user_id}", web::delete().to(web_interface::user::api_delete_user))
             .route("/api/user/search", web::get().to(web_interface::user::api_filter_user))
             .route("/upload", web::post().to(challenge_upload_handler::handle_challenge))
-            .route("/submit/{flag}", web::post().to(flag_receiver::handle_submission))
+            .route("/submit/{challenge}/{flag}", web::post().to(flag_receiver::handle_submission))
             .default_service(
                 web::route().to(web_interface::not_found)
             )

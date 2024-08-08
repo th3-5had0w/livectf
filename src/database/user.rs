@@ -156,24 +156,24 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
                     let username = &filter.filter_instance().username();
 
                     filter_statement.push_str(
-                        (format!("username{}", op) + format!("'{}'", username.replace("\'", "\\'")).as_str()).as_str()
+                        format!("username LIKE '{}'", username.replace("\'", "\\'")).as_str()
                     )
                 },
                 "bio" => {
                     let bio = &filter.filter_instance().bio();
 
                     filter_statement.push_str(
-                        (format!("bio{}", op) + format!("'{}'", bio.replace("\'", "\\'")).as_str()).as_str()
+                        format!("bio LIKE '{}'", bio.replace("\'", "\\'")).as_str()
                     )
                 },
                 "is_locked" => {
                     filter_statement.push_str(
-                        (format!("is_locked{}", op) + format!("{}", &filter.filter_instance().is_locked()).as_str()).as_str()
+                        format!("is_locked={}", &filter.filter_instance().is_locked()).as_str()
                     )
                 },
                 "is_admin" => {
                     filter_statement.push_str(
-                        (format!("is_admin{}", op) + format!("{}", &filter.filter_instance().is_admin()).as_str()).as_str()
+                        format!("is_admin={}", &filter.filter_instance().is_admin()).as_str()
                     )
                 },
                 _ => ()

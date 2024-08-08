@@ -77,8 +77,9 @@ pub fn craft_type_notify_message<T: Display>(target_module: &String, args: &[T])
             match args[0].to_string().as_str() {
 
                 "flag_submit" => {
-                    data.insert("flag", args[1].to_string());
-                    data.insert("submit_by", args[2].to_string());        
+                    data.insert("challenge_name", args[1].to_string());
+                    data.insert("flag", args[2].to_string());
+                    data.insert("submit_by", args[3].to_string());        
                 },
 
                 "flag_info" => {

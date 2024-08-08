@@ -24,6 +24,7 @@ CREATE TABLE users (
 
 CREATE TABLE solve_history (
     id SERIAL PRIMARY KEY,
+    challenge_name TEXT,
     user_id INTEGER,
     is_success BOOLEAN,
     time BIGINT,

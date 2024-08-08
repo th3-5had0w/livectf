@@ -93,7 +93,7 @@ pub async fn db_filter_for_deploy_log(
                     },
                     "state" => {
                         filter_statement.push_str(
-                            (format!("state{}", op) + format!("{}", &filter.filter_instance().raw_state()).as_str()).as_str()
+                            format!("is_locked={}", &filter.filter_instance().raw_state()).as_str()
                         )
                     },
                     "start_time" => {

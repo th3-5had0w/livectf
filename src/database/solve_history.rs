@@ -8,6 +8,7 @@ use crate::database::{DbConnection, DbError, DbFilter, DB_SOLVE_HISTORY_TABLE};
 #[derive(FromRow, Decode, serde::Deserialize, serde::Serialize)]
 pub struct SolveHistoryEntry {
     id: i32,
+    challenge_name: String,
     user_id: i32,
     is_success: bool,
     time: i64,
@@ -15,9 +16,10 @@ pub struct SolveHistoryEntry {
 }
 
 impl SolveHistoryEntry {
-    pub fn new(user_id: i32, is_success: bool, submit_content: String) -> Self {
+    pub fn new(user_id: i32, challenge_name: String, is_success: bool, submit_content: String) -> Self {
         SolveHistoryEntry {
             id: -1,
+            challenge_name,
             user_id,
             is_success,
             submit_content,
@@ -49,10 +51,15 @@ impl SolveHistoryEntry {
         &self.submit_content[..]
     }
 
+    pub fn challenge_name(&self) -> &str {
+        &self.challenge_name
+    }
+
     pub fn get_empty_solve_history_entry() -> Self {
         SolveHistoryEntry {
             id: -1,
             user_id: -1,
+            challenge_name: String::from("nothing"),
             is_success: false,
             time: -1,
             submit_content: "".to_string()
@@ -68,6 +75,7 @@ pub async fn db_save_solve_result(db_connection: &DbConnection, solve_entry: Sol
     let query = format!("
     INSERT INTO {table_name} (
         user_id,
+        challenge_name,
         is_success,
         time,
         submit_content
@@ -82,6 +90,7 @@ pub async fn db_save_solve_result(db_connection: &DbConnection, solve_entry: Sol
 
         let result: PgQueryResult = sqlx::query(&query[..])
         .bind(solve_entry.user_id())
+        .bind(solve_entry.challenge_name())
         .bind(solve_entry.is_success())
         .bind(solve_entry.raw_time())
         .bind(solve_entry.submit_content())
@@ -133,6 +142,13 @@ pub async fn db_filter_for_solve_history(
                         (format!("id{}", op) + format!("{}", &filter.filter_instance().id()).as_str()).as_str()
                     )
                 },
+                "challenge_name" => {
+                    let challenge_name = &filter.filter_instance().challenge_name();
+
+                    filter_statement.push_str(
+                        format!("challenge_name LIKE '{}'", challenge_name.replace("\'", "\\'")).as_str()
+                    )
+                },
                 "user_id" => {
                     filter_statement.push_str(
                         (format!("user_id{}", op) + &format!("{}", &filter.filter_instance().user_id()).as_str()).as_str()
@@ -140,7 +156,7 @@ pub async fn db_filter_for_solve_history(
                 },
                 "is_success" => {
                     filter_statement.push_str(
-                        (format!("is_success{}", op) + &format!("{}", &filter.filter_instance().is_success()).as_str()).as_str()
+                        format!("is_success={}", &filter.filter_instance().is_success()).as_str()
                     )
                 },
                 "time" => {
@@ -161,6 +177,7 @@ pub async fn db_filter_for_solve_history(
     let mut query = format!("
     SELECT 
         id,
+        challenge_name,
         user_id,
         state,
         is_success,

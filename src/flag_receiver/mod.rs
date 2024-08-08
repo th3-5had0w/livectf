@@ -63,7 +63,7 @@ fn deserialize_data(serialized_data: &Vec<u8>) -> HashMap<&str, String> {
     return data;
 }
 
-pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path<(String,)>, req: HttpRequest) -> Result<HttpResponse, actix_web::Error> {
+pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path<(String,String)>, req: HttpRequest) -> Result<HttpResponse, actix_web::Error> {
     let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 
     let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
@@ -73,10 +73,11 @@ pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path
     if claims.len() == 0 {
         return Ok(forbiden("Not authenticated"));
     }
-    let submitted_flag = &path.0;
+    let challenge_name = &path.0;
+    let submitted_flag = &path.1;
     
     let target_module = String::from_str("flag_receiver").unwrap();
-    let data = craft_type_notify_message(&target_module, &["flag_submit", submitted_flag, user_id]);
+    let data = craft_type_notify_message(&target_module, &["flag_submit", challenge_name, submitted_flag, user_id]);
 
     slaves.notify(target_module, data);
     return Ok(HttpResponse::Ok().body(format!("flag submitted successfully")));
@@ -91,20 +92,19 @@ fn cmd_flag_info(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
 fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
     let submitted_flag = data.get("flag").expect("missing flag").to_string();
     let user_id = data.get("submit_by").expect("missing user_id").to_string();
+    let chall_name = data.get("challenge_name").expect("mssing challenge_name").to_string();
     let rt = Runtime::new().expect("failed creating tokio runtime");
 
-    todo!("Add challenge name into solving record");
     for (challenge_name, flag) in &ctx.challenge_infos {
         if &submitted_flag == flag {
             let solve_history = SolveHistoryEntry::new(
                 user_id.parse::<i32>().expect("user_id must be of type `i32`"),
+                challenge_name.clone(),
                 true,
                 submitted_flag
             );
     
             println!("saving history");
-            let db = ctx.db_conn.clone();
-
             rt.block_on(ctx.db_conn.log_solve_result(solve_history));    
             return;
         }
@@ -112,6 +112,7 @@ fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
 
     let solve_history = SolveHistoryEntry::new(
         user_id.parse::<i32>().expect("user_id must be of type `i32`"),
+        chall_name,
         false,
         submitted_flag
     );
