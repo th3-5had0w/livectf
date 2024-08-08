@@ -129,9 +129,9 @@ pub fn craft_type_notify_message<T: Display>(target_module: &String, args: &[T])
             match args[0].to_string().as_str() {
 
                 "enqueue" => {
-                    data.insert("challenge_name", args[0].to_string());
-                    data.insert("start_time", args[1].to_string());
-                    data.insert("end_time", args[2].to_string());
+                    data.insert("challenge_name", args[1].to_string());
+                    data.insert("start_time", args[2].to_string());
+                    data.insert("end_time", args[3].to_string());
                 },
 
                 _ => {

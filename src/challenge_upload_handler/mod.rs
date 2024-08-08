@@ -37,11 +37,11 @@ pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>
     
 }
 
-pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, _: web::Data<DbConnection>, req: HttpRequest, mut payload: Multipart) -> Result<HttpResponse, actix_web::Error> {
+pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, req: HttpRequest, mut payload: Multipart) -> Result<HttpResponse, actix_web::Error> {
 
 
-    let start_time_header = req.headers().get("start");
-    let end_time_header = req.headers().get("end");
+    let start_time_header = req.headers().get("X-start");
+    let end_time_header = req.headers().get("X-end");
 
     let start_time = match start_time_header {
         Some(time) => match i128::from_str_radix(time.to_str().unwrap(), 10) {
@@ -63,7 +63,7 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, _: web::D
         SystemTime::now().duration_since(UNIX_EPOCH).expect("back to the future!!!").as_secs()
     ).expect("Cannot convert current epoch to i128");
 
-    if start_time < now_epoch + 60 * 15 {
+    if start_time < now_epoch + 60 * 1 {
         return Ok(HttpResponse::BadRequest().body(format!("This is CTF not a Vietcong's guerilla war, no need to caught people by surprise!!!")))
     }
 
@@ -71,14 +71,14 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, _: web::D
         return Ok(HttpResponse::BadRequest().body(format!("Maximum date from now is 1 week")))
     }
 
-    if end_time < start_time + 60 * 15 {
+    if end_time < start_time + 60 * 1 {
         return Ok(HttpResponse::BadRequest().body(format!("Solving challenge within that amount of time? Nah.")))
     }
 
 
     while let Some(mut field) = payload.try_next().await? {
-        let content_type = field.content_disposition().unwrap();
-        if let Some(_) = content_type.get_filename() {
+        let data_part = field.content_disposition().unwrap();
+        if let Some(_) = data_part.get_filename() {
 
             let filename = Uuid::new_v4();
             let filepath = format!("./archives/{}.tar.gz", filename);
