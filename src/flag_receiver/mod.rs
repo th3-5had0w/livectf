@@ -67,8 +67,7 @@ pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path
     let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 
     let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
-    let no_id = String::from("-1");
-    let user_id = claims.get("id").unwrap_or(&no_id);
+    let username = claims.get("username").expect("Missing username in JWT");
 
     if claims.len() == 0 {
         return Ok(forbiden("Not authenticated"));
@@ -77,7 +76,7 @@ pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path
     let submitted_flag = &path.1;
     
     let target_module = String::from_str("flag_receiver").unwrap();
-    let data = craft_type_notify_message(&target_module, &["flag_submit", challenge_name, submitted_flag, user_id]);
+    let data = craft_type_notify_message(&target_module, &["flag_submit", challenge_name, submitted_flag, username]);
 
     slaves.notify(target_module, data);
     return Ok(HttpResponse::Ok().body(format!("flag submitted successfully")));
@@ -91,14 +90,14 @@ fn cmd_flag_info(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
 
 fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
     let submitted_flag = data.get("flag").expect("missing flag").to_string();
-    let user_id = data.get("submit_by").expect("missing user_id").to_string();
+    let username = data.get("submit_by").expect("missing username").to_string();
     let chall_name = data.get("challenge_name").expect("mssing challenge_name").to_string();
     let rt = Runtime::new().expect("failed creating tokio runtime");
 
     for (challenge_name, flag) in &ctx.challenge_infos {
         if &submitted_flag == flag {
             let solve_history = SolveHistoryEntry::new(
-                user_id.parse::<i32>().expect("user_id must be of type `i32`"),
+                username,
                 challenge_name.clone(),
                 true,
                 submitted_flag
@@ -111,7 +110,7 @@ fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
     }
 
     let solve_history = SolveHistoryEntry::new(
-        user_id.parse::<i32>().expect("user_id must be of type `i32`"),
+        username,
         chall_name,
         false,
         submitted_flag

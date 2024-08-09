@@ -1,17 +1,23 @@
 // use std::{sync::{mpsc::{self, Receiver, Sender}, Arc}, thread::spawn};
-use actix_web::{Result as ActixResult, HttpResponse, http::header::ContentType, web};
+use actix_web::{http::header::ContentType, rt, web, HttpResponse, Result as ActixResult};
 use maud::{html, Markup};
 use jwt::{SignWithKey, VerifyWithKey, Error as JWT_Error};
 use hmac::{Hmac, Mac};
-use crate::database::user::UserInstance;
-use std::collections::BTreeMap;
+use crate::database::{deploy_log::DeployLogInstance, solve_history::SolveHistoryEntry, user::UserInstance, DbFilter};
+use std::{collections::BTreeMap, os::unix::fs::MetadataExt, vec};
 use sha2::Sha256;
+use std::fs;
+use chrono::{DateTime, offset::Utc};
 // use futures_util::lock::Mutex;
 // use uuid::Uuid;
 
 use crate::database::{DbConnection};
 
 pub mod user;
+
+const USER_PATH: &str = "users";
+const SOLVE_LOG_PATH: &str = "solve-logs";
+const CHALLENGE_PATH: &str = "challenges";
 
 #[derive(serde::Serialize)]
 pub struct JsonResponse {
@@ -23,14 +29,6 @@ pub struct JsonResponse {
 pub struct PaginationQuery {
     path: Option<String>
 }
-
-// pub async fn not_found() -> Result<HttpResponse, actix_web::Error> {
-//     let resp = HttpResponse::Ok()
-//         .content_type(ContentType::plaintext())
-//         .body("404 - not found Xd");
-    
-//     Ok(resp)
-// }
 
 // TODO: randomize this, store in env
 const SECRET_KEY: &str = "SUPER_FUCKING_SECURE";
@@ -203,12 +201,56 @@ pub async fn index() -> ActixResult<Markup> {
     })
 }
 
+// TODO: add advanced search and delete feature to solve logs
+// TODO: add feature to allow admin to deploy/take down challenge manually
+// TODO: add deploy log section
+// TODO: check if user is admin
 pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<DbConnection>) -> ActixResult<Markup> {
     let path = page.path.clone().unwrap_or(String::from("/"));
     let mut users: Vec<UserInstance> = vec![];
-    if path == "users" {
+    let mut solve_logs: Vec<SolveHistoryEntry> = vec![];
+    let mut challenges: Vec<(String, DateTime<Utc>, usize, usize)> = vec![];
+    
+    if path == USER_PATH {
         users = db_conn.get_all_user().await;
+    } else if path == SOLVE_LOG_PATH {
+        solve_logs = db_conn.fetch_recent_solve_log(20).await;
+    } else if path == CHALLENGE_PATH {
+        let file_entry = fs::read_dir("./archives/").unwrap();
+        for entry in file_entry {
+            let dir_entry = entry.unwrap();
+            let metadata = fs::metadata(dir_entry.path()).unwrap();
+            if metadata.is_dir() {
+                let challenge_name = String::from_utf8(dir_entry.file_name().as_encoded_bytes().to_vec()).unwrap();
+                let creation_time = DateTime::from_timestamp(metadata.ctime(), 0).unwrap();
+                let filter = DbFilter::filter_with(SolveHistoryEntry::new(
+                    String::from("test"),
+                    challenge_name.clone(),
+                    true,
+                    String::from("test")
+                ), vec![
+                    (String::from("challenge_name"), String::from("=")),
+                    (String::from("is_success"), String::from("="))
+                ]);
+               
+                let solve_count = db_conn.filter_solve_log(filter, -1).await.len();
+
+                let filter = DbFilter::filter_with(SolveHistoryEntry::new(
+                    String::from("test"),
+                    challenge_name.clone(),
+                    false,
+                    String::from("test")
+                ), vec![
+                    (String::from("challenge_name"), String::from("="))
+                ]);
+
+                let submission_count = db_conn.filter_solve_log(filter, -1).await.len();
+
+                challenges.push((challenge_name, creation_time, solve_count, submission_count));
+            }
+        }
     }
+
     Ok(html! {
         html {
             head {
@@ -223,16 +265,17 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                 div class="container" {
                     div class="wrapper" {
                         div class="menu-wrapper" {
-                            a href="/sheep_center?path=users" { "Users management" }
+                            a href=(format!("/sheep_center?path={}", USER_PATH)) { "Users management" }
                             a href="/sheep_center?path=challenges" { "Challenges" }
-                            a href="/sheep_center?path=logs" { "View logs" }
+                            a href=(format!("/sheep_center?path={}", SOLVE_LOG_PATH)) { "Solve logs" }
+                            a href="/sheep_center?path=deploy-logs" { "Deploy logs" }
                         }
     
                         div class="main-section" {
-                            @if path == "users" {
+                            @if path == USER_PATH {
                                 h1 id="section-title" { "User management" }
                                 div class="section-wrapper" {
-                                    table class="user-table" {
+                                    table class="the-table" {
                                         tr {
                                             th { "ID" }
                                             th { "Username" }
@@ -240,6 +283,7 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                             th { "Role" }
                                             th { "Solved" }
                                             th { "Locked" }
+                                            th { "Action" }
                                         }
                                         @for user in users {
                                             tr {
@@ -253,6 +297,76 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                                 }
                                                 td { (user.challenge_solved()) }
                                                 td { (user.is_locked()) }
+                                                td { 
+                                                    div class="action-btn-wrapper" {
+                                                        button data-userid=(user.id()) class="del-btn" {
+                                                            "🗑️"
+                                                        }
+
+                                                        button data-userid=(user.id()) class="ban-btn" {
+                                                            "⛔"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } @else if path == SOLVE_LOG_PATH {
+                                h1 id="section-title" { "Solve log" }
+                                div class="section-wrapper" {
+                                    table class="the-table" {
+                                        tr {
+                                            th { "ID" }
+                                            th { "Challenge" }
+                                            th { "Username" }
+                                            th { "Result" }
+                                            th { "Time" }
+                                            th { "Flag" }
+                                        }
+                                        @for log in solve_logs {
+                                            tr {
+                                                td { (log.id()) }
+                                                td { (log.challenge_name()) }
+                                                td { (log.username()) }
+                                                @match log.is_success() {
+                                                    true => td class="success-submission" {
+                                                        "Success"
+                                                    },
+                                                    _ => td class="fail-submission" {
+                                                        "Failed"
+                                                    }
+                                                }
+                                                td { (log.time()) }
+                                                td { (log.submit_content()) }
+                                            }
+                                        }
+                                    }
+                                }
+                            } @else if path == CHALLENGE_PATH {
+                                h1 id="section-title" { "Challenges" }
+                                form class="challenge-upload-form" action="/api/challenge-upload" method="post" enctype="multipart/form-data" {
+                                    input type="date" name="start-date" id="start-date" {}
+                                    input type="time" name="start-time" id="start-time" {}
+                                    input type="date" name="end-date" id="end-date" {}
+                                    input type="time" name="end-time" id="end-time" {}
+                                    input type="file" name="challenge-file" id="fileToUpload" accept=".tar.gz" {}
+                                    button id="upload-challenge" { "upload" }
+                                }
+                                div class="section-wrapper" {
+                                    table class="the-table" {
+                                        tr {
+                                            th { "Challenge ID" }
+                                            th { "Upload Time" }
+                                            th { "Solved" }
+                                            th { "Submission" }
+                                        }
+                                        @for chall in challenges {
+                                            tr {
+                                                td { (chall.0) }
+                                                td { (chall.1) }
+                                                td { (chall.2) }
+                                                td { (chall.3) }
                                             }
                                         }
                                     }

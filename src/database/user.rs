@@ -1,7 +1,6 @@
 use sqlx::{FromRow, Decode};
 use sqlx::postgres::PgQueryResult;
-use chrono::DateTime;
-use chrono::offset::Utc;
+use chrono::{DateTime, offset::Utc};
 use bcrypt::{verify as bcrypt_verify, hash as bcrypt_hash};
 use serde;
     
@@ -202,12 +201,12 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
     {filter_statement}
     ", table_name=DB_USER_TABLE, filter_statement=filter_statement);
 
-    if limit == -1 {
+    if limit != -1 {
         query.push_str("LIMIT $1");
     }
     let mut query_as = sqlx::query_as(&query[..]);
 
-    if limit == -1 {
+    if limit != -1 {
         query_as = query_as.bind(limit);
     }
 

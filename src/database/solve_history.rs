@@ -9,18 +9,18 @@ use crate::database::{DbConnection, DbError, DbFilter, DB_SOLVE_HISTORY_TABLE};
 pub struct SolveHistoryEntry {
     id: i32,
     challenge_name: String,
-    user_id: i32,
+    username: String,
     is_success: bool,
     time: i64,
     submit_content: String
 }
 
 impl SolveHistoryEntry {
-    pub fn new(user_id: i32, challenge_name: String, is_success: bool, submit_content: String) -> Self {
+    pub fn new(username: String, challenge_name: String, is_success: bool, submit_content: String) -> Self {
         SolveHistoryEntry {
             id: -1,
             challenge_name,
-            user_id,
+            username,
             is_success,
             submit_content,
             time: chrono::offset::Utc::now().timestamp()
@@ -30,8 +30,8 @@ impl SolveHistoryEntry {
         self.id
     }
 
-    pub fn user_id(&self) -> i32 {
-        self.user_id
+    pub fn username(&self) -> &str {
+        self.username.as_str()
     }
 
     pub fn is_success(&self) -> bool {
@@ -48,7 +48,7 @@ impl SolveHistoryEntry {
     }
 
     pub fn submit_content(&self) -> &str {
-        &self.submit_content[..]
+        self.submit_content.as_str()
     }
 
     pub fn challenge_name(&self) -> &str {
@@ -58,7 +58,7 @@ impl SolveHistoryEntry {
     pub fn get_empty_solve_history_entry() -> Self {
         SolveHistoryEntry {
             id: -1,
-            user_id: -1,
+            username: String::from("nothing"),
             challenge_name: String::from("nothing"),
             is_success: false,
             time: -1,
@@ -74,7 +74,7 @@ pub async fn db_save_solve_result(db_connection: &DbConnection, solve_entry: Sol
 
     let query = format!("
     INSERT INTO {table_name} (
-        user_id,
+        username,
         challenge_name,
         is_success,
         time,
@@ -85,11 +85,12 @@ pub async fn db_save_solve_result(db_connection: &DbConnection, solve_entry: Sol
             $1,
             $2,
             $3,
-            $4
+            $4,
+            $5
         );", table_name=DB_SOLVE_HISTORY_TABLE);
 
         let result: PgQueryResult = sqlx::query(&query[..])
-        .bind(solve_entry.user_id())
+        .bind(solve_entry.username())
         .bind(solve_entry.challenge_name())
         .bind(solve_entry.is_success())
         .bind(solve_entry.raw_time())
@@ -149,9 +150,11 @@ pub async fn db_filter_for_solve_history(
                         format!("challenge_name LIKE '{}'", challenge_name.replace("\'", "\\'")).as_str()
                     )
                 },
-                "user_id" => {
+                "username" => { 
+                    let username = &filter.filter_instance().username();
+
                     filter_statement.push_str(
-                        (format!("user_id{}", op) + &format!("{}", &filter.filter_instance().user_id()).as_str()).as_str()
+                        format!("username LIKE '{}'", username.replace("\'", "\\'")).as_str()
                     )
                 },
                 "is_success" => {
@@ -178,8 +181,7 @@ pub async fn db_filter_for_solve_history(
     SELECT 
         id,
         challenge_name,
-        user_id,
-        state,
+        username,
         is_success,
         time,
         submit_content
@@ -188,12 +190,12 @@ pub async fn db_filter_for_solve_history(
     {filter_statement}
     ", table_name=DB_SOLVE_HISTORY_TABLE, filter_statement=filter_statement);
 
-    if limit == -1 {
+    if limit != -1 {
         query.push_str("LIMIT $1");
     }
     let mut query_as = sqlx::query_as(&query[..]);
 
-    if limit == -1 {
+    if limit != -1 {
         query_as = query_as.bind(limit);
     }
 

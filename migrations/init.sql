@@ -25,8 +25,18 @@ CREATE TABLE users (
 CREATE TABLE solve_history (
     id SERIAL PRIMARY KEY,
     challenge_name TEXT,
-    user_id INTEGER,
+    username TEXT,
     is_success BOOLEAN,
     time BIGINT,
     submit_content TEXT
 );
+
+-- CREATE DUMMY DATA FOR TESTING
+INSERT INTO solve_history (username, challenge_name, is_success, time, submit_content) VALUES ('shin24', '051130ad-acc4-404b-8331-ff1e9714a10c', true, 1723193798, 'cosgang{so_cool_for_first_challenge}');
+
+INSERT INTO solve_history (username, challenge_name, is_success, time, submit_content) VALUES ('shin24', '051130ad-acc4-404b-8331-ff1e9714a10c', true, 1723193798, 'cosgang{so_cool_for_first_challenge}');
+INSERT INTO solve_history (username, challenge_name, is_success, time, submit_content) VALUES ('shin24', '051130ad-acc4-404b-8331-ff1e9714a10c', true, 1723193798, 'cosgang{so_cool_for_first_challenge}');
+INSERT INTO solve_history (username, challenge_name, is_success, time, submit_content) VALUES ('shin24', '051130ad-acc4-404b-8331-ff1e9714a10c', true, 1723193798, 'cosgang{so_cool_for_first_challenge}');
+INSERT INTO solve_history (username, challenge_name, is_success, time, submit_content) VALUES ('shin24', '051130ad-acc4-404b-8331-ff1e9714a10c', true, 1723193798, 'cosgang{so_cool_for_first_challenge}');
+INSERT INTO solve_history (username, challenge_name, is_success, time, submit_content) VALUES ('shin24', '051130ad-acc4-404b-8331-ff1e9714a10c', true, 1723193798, 'cosgang{so_cool_for_first_challenge}');
+INSERT INTO solve_history (username, challenge_name, is_success, time, submit_content) VALUES ('shin24', '051130ad-acc4-404b-8331-ff1e9714a10c', false, 1723193798, 'cosgang{so_cool_for_first_challengaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaae}');

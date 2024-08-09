@@ -1,6 +1,8 @@
 use sqlx::postgres::{PgPoolOptions, Postgres};
 use sqlx::pool::Pool;
+use user::UserInstance;
 use std::clone::Clone;
+use std::vec;
 
 pub mod user;
 pub mod deploy_log;
@@ -187,7 +189,7 @@ impl DbConnection {
         return result;
     }
 
-    pub async fn filter_solve_log(&self, filter: DbFilter<solve_history::SolveHistoryEntry>, limit: u32) -> Vec<solve_history::SolveHistoryEntry> {
+    pub async fn filter_solve_log(&self, filter: DbFilter<solve_history::SolveHistoryEntry>, limit: i32) -> Vec<solve_history::SolveHistoryEntry> {
         solve_history::db_filter_for_solve_history(&self, filter, limit as i32).await.unwrap_or(
             vec![]
         )

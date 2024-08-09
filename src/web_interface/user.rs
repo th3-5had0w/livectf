@@ -215,7 +215,7 @@ pub async fn api_filter_user(_: web::Data<NotifierComms>, db_conn: web::Data<DbC
 
     let user_id = claims.get("id").unwrap_or(&"-1".to_string()).parse::<i32>().unwrap();
     let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap();
-
+    
     let filter: DbFilter<UserInstance> = DbFilter::filter_with(
         query_str.filter_instance().deep_copy(), 
         query_str.filter_by().clone()
