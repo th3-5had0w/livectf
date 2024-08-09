@@ -16,7 +16,8 @@ pub struct UserInstance {
     pub bio: String,
     pub is_locked: bool,
     pub lock_due_at: i64,
-    pub is_admin: bool
+    pub is_admin: bool,
+    pub score: i32
 }
 
 impl UserInstance {
@@ -35,7 +36,8 @@ impl UserInstance {
             bio: "write something...".to_string(),
             is_locked: false,
             lock_due_at: 0,
-            is_admin
+            is_admin,
+            score: 0
         }
     } 
     pub fn id(&self) -> i32 {
@@ -78,6 +80,11 @@ impl UserInstance {
     pub fn email(&self) -> &str {
         self.email.as_str()
     }
+    
+    pub fn score(&self) -> i32 {
+        self.score
+    }
+    
 
     pub fn deep_copy(&self) -> Self {
         UserInstance {
@@ -89,7 +96,8 @@ impl UserInstance {
             challenge_solved: self.challenge_solved(),
             is_locked: self.is_locked(),
             lock_due_at: self.raw_lock_due_at(),
-            is_admin: self.is_admin()
+            is_admin: self.is_admin(),
+            score: self.score()
         }
     }
 
@@ -113,7 +121,8 @@ impl UserInstance {
             bio: "no account matched that username".to_string(),
             is_locked: false,
             lock_due_at: 0,
-            is_admin: false
+            is_admin: false,
+            score: 0
         }
     }
 
@@ -175,6 +184,11 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
                         format!("is_admin={}", &filter.filter_instance().is_admin()).as_str()
                     )
                 },
+                "score" => {
+                    filter_statement.push_str(
+                        (format!("score{}", op) + format!("{}", &filter.filter_instance().score()).as_str()).as_str()
+                    )
+                }
                 _ => ()
             } 
 
@@ -195,7 +209,8 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
         bio,
         is_locked,
         lock_due_at,
-        is_admin
+        is_admin,
+        score
     FROM 
         {table_name}
     {filter_statement}
@@ -228,7 +243,8 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
             bio,
             is_locked,
             lock_due_at,
-            is_admin
+            is_admin,
+            score
         )
     =
         (
@@ -239,6 +255,7 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
             $5,
             $6,
             $7,
+            $8
         )
     WHERE id = $8
     ", table_name=DB_USER_TABLE);
@@ -251,7 +268,7 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
         .bind(user.is_locked())
         .bind(user.raw_lock_due_at())
         .bind(user.is_admin())
-        .bind(user.id())
+        .bind(user.score())
         .execute(&db_connection.pool).await.unwrap();
 
     if result.rows_affected() > 0 {
@@ -283,7 +300,8 @@ pub async fn db_user_login(db_connection: &DbConnection, username: &str, passwor
         bio,
         is_locked,
         lock_due_at,
-        is_admin
+        is_admin,
+        score
     FROM 
         {table_name}
     WHERE 
@@ -317,7 +335,8 @@ pub async fn db_user_register(db_connection: &DbConnection, user: UserInstance) 
         bio,
         is_locked,
         lock_due_at,
-        is_admin
+        is_admin,
+        score
     )
     VALUES
         (
@@ -328,7 +347,8 @@ pub async fn db_user_register(db_connection: &DbConnection, user: UserInstance) 
             $5,
             $6,
             $7,
-            $8
+            $8,
+            0
         );", table_name=DB_USER_TABLE);
         let result: PgQueryResult = sqlx::query(&query[..])
         .bind(user.username().trim())
@@ -361,4 +381,32 @@ pub async fn db_get_all_user(db_connection: &DbConnection) -> Vec<UserInstance> 
         .unwrap_or(Vec::<UserInstance>::new());
 
     return result;
+}
+
+pub async fn db_get_user_by_id(db_connection: &DbConnection, user_id: i32) -> Result<UserInstance, sqlx::Error> {
+    let query = format!("
+    SELECT 
+        id,
+        username,
+        password,
+        email,
+        challenge_solved,
+        bio,
+        is_locked,
+        lock_due_at,
+        is_admin,
+        score
+    FROM 
+        {table_name}
+    WHERE 
+        id=$1;",
+        table_name=DB_USER_TABLE
+    );
+
+
+    let user = sqlx::query_as(&query[..])
+        .bind(user_id)
+        .fetch_one(&db_connection.pool).await.unwrap_or(UserInstance::get_dead_guy_user());
+    
+    return Ok(user);
 }

@@ -188,6 +188,7 @@ pub async fn db_filter_for_solve_history(
     FROM 
         {table_name}
     {filter_statement}
+    order by time DESC
     ", table_name=DB_SOLVE_HISTORY_TABLE, filter_statement=filter_statement);
 
     if limit != -1 {

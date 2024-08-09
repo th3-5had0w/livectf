@@ -426,3 +426,84 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
         }
     })
 }
+
+
+pub async fn challenges(page: web::Query<PaginationQuery>, db_conn: web::Data<DbConnection>, req: HttpRequest) -> ActixResult<Markup> {
+    Ok(html!(
+        html {
+            head {
+                link rel="stylesheet" href="/static/css/styles.css" {}
+                link rel="stylesheet" href="/static/css/styles_challenges.css" {}
+                meta charset="utf-8" {}
+                title {
+                    "CoSGang livectf - Challenges"
+                }
+            }
+            body {
+                div class="container" {
+                    h1 style="margin-bottom: 20px;"{ "Challenges" }
+                    input id="flag-submit" placeholder="Submit your flag here..." {}
+                    div class="wrapper" {
+                        div class="challenge-wrapper" {
+                            h3 { "Electronia" }
+                            div class="chall-metadata"{
+                                p class="chall-score" { "500" }
+                                p class="chall-category" { "Web" }
+                            }
+                        }
+    
+                        div class="challenge-wrapper challenge-solved" {
+                            h3 { "Easy V8" }
+                            div class="chall-metadata"{
+                                p class="chall-score" { "500" }
+                                p class="chall-category" { "Pwn" }
+                            }
+                        }
+
+                        div class="challenge-wrapper challenge-solved" {
+                            h3 { "1 bit flip" }
+                            div class="chall-metadata"{
+                                p class="chall-score" { "500" }
+                                p class="chall-category" { "Pwn" }
+                            }
+                        }
+
+                        div class="challenge-wrapper" {
+                            h3 { "Postviewer V3" }
+                            div class="chall-metadata"{
+                                p class="chall-score" { "500" }
+                                p class="chall-category" { "Web" }
+                            }
+                        }
+
+                        div class="challenge-wrapper" {
+                            h3 { "Pokemon" }
+                            div class="chall-metadata"{
+                                p class="chall-score" { "500" }
+                                p class="chall-category" { "Reverse Engineering" }
+                            }
+                        }
+
+                        div class="challenge-wrapper" {
+                            h3 { "RSA v1" }
+                            div class="chall-metadata"{
+                                p class="chall-score" { "500" }
+                                p class="chall-category" { "Crypto" }
+                            }
+                        }
+
+                        div class="challenge-wrapper" {
+                            h3 { "Registry" }
+                            div class="chall-metadata"{
+                                p class="chall-score" { "500" }
+                                p class="chall-category" { "Forensic" }
+                            }
+                        }
+                    }
+                    
+                }
+            }
+        }
+    ))
+}
+

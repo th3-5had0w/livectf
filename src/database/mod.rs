@@ -5,8 +5,10 @@ use std::vec;
 
 pub mod user;
 pub mod solve_history;
+pub mod challenge;
 
 // TODO: change TEXT to VARCHAR as TEXT is slow
+// TODO: remove all the getters they are so useless 
 // remember to change this to a .env file, the credentials should be stored in environment variable rather than hard-coded
 const DB_HOST: &str = "localhost";
 const DB_USERNAME: &str = "test";
@@ -14,7 +16,7 @@ const DB_PASSWORD: &str = "WisHBrAdhOtalMaNOste";
 const DB_DATABASE_NAME: &str = "livectf";
 const DB_POOL_MAX_CONNECTION: u32 = 5;
 
-const DB_DEPLOY_LOG_TABLE: &str = "depoy_log";
+const DB_CHALLENGE_TABLE: &str = "challenges";
 const DB_USER_TABLE: &str = "users";
 const DB_SOLVE_HISTORY_TABLE: &str = "solve_history";
 
@@ -91,6 +93,12 @@ impl DbConnection {
         user.censor_password(password_censor)
     }
 
+    pub async fn get_user_by_id(&self, user_id: i32, password_censor: bool) -> user::UserInstance {
+        let found_user: user::UserInstance = user::db_get_user_by_id(&self, user_id).await.unwrap();
+
+        found_user.censor_password(password_censor)
+    }
+
     pub async fn filter_user(&self, filter: DbFilter<user::UserInstance>) -> Vec<user::UserInstance> {
         let users: Vec<user::UserInstance> = user::db_filter_for_user(&self, filter, 1).await.unwrap_or(
             Vec::new()
@@ -117,6 +125,13 @@ impl DbConnection {
         let result: bool = user::db_edit_user(self, user).await.unwrap_or(false);
 
         return result;
+    }
+
+    pub async fn user_add_score(&self, user_id: i32, how_many: i32) -> bool {
+        let mut found_user = self.get_user_by_id(user_id, true).await;
+
+        found_user.score += how_many;
+        self.edit_user(found_user).await
     }
 
     pub async fn create_user(&self, user_to_create: user::UserInstance) -> bool {
