@@ -2,7 +2,7 @@ use std::{collections::HashMap, str::FromStr, sync::mpsc::{self, Receiver, Sende
 
 use actix_web::{web, HttpResponse, HttpRequest, cookie::Cookie};
 use tokio::runtime::Runtime;
-use uuid::Uuid;
+// use uuid::Uuid;
 
 use crate::{notifier::{craft_type_notify_message, NotifierCommInfo, NotifierComms}, Notifier};
 use crate::database::{solve_history::SolveHistoryEntry, DbConnection};
@@ -28,7 +28,7 @@ pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>
 
 
     let comm_info = NotifierCommInfo {
-        id: Uuid::new_v4().as_u128(),
+        // id: Uuid::new_v4().as_u128(),
         name: "flag_receiver".to_string(),
         broadcast_channel: notifier_sender
     };

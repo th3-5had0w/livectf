@@ -3,7 +3,6 @@ use regex::Regex;
 use std::collections::BTreeMap;
 
 use crate::database::{DbConnection, user::UserInstance, DbFilter};
-use crate::notifier::NotifierComms;
 use crate::web_interface::{JsonResponse, sign_jwt, get_jwt_claims, get_error, success, unauthorized, forbiden};
 
 #[derive(serde::Deserialize)]
@@ -19,7 +18,7 @@ pub struct RegisterData {
     email: String
 }
 
-pub async fn api_user_login(_: web::Data<NotifierComms>, db_conn: web::Data<DbConnection>, form: web::Form<LoginData>) -> Result<HttpResponse, actix_web::Error> {
+pub async fn api_user_login(db_conn: web::Data<DbConnection>, form: web::Form<LoginData>) -> Result<HttpResponse, actix_web::Error> {
     if form.username.len() == 0 || form.password.len() == 0 {
         return Ok(get_error("Missing username/password"));
     } 
@@ -43,17 +42,16 @@ pub async fn api_user_login(_: web::Data<NotifierComms>, db_conn: web::Data<DbCo
         }
     }
 
-    let json_resp = JsonResponse {is_error: false, message: "Login success!".to_string()};
+    let json_resp = JsonResponse {is_error: false, message: sign_jwt(user)};
     let json_resp = serde_json::to_string(&json_resp).unwrap();
     let resp = HttpResponse::Ok()
         .content_type(ContentType::json())
-        .append_header(("Set-Cookie", String::from("auth=") +  sign_jwt(user).as_str()))
         .body(json_resp);
     
     return Ok(resp);
 }
 
-pub async fn api_user_register(_: web::Data<NotifierComms>, db_conn: web::Data<DbConnection>, form: web::Form<RegisterData>) -> Result<HttpResponse, actix_web::Error> {
+pub async fn api_user_register(db_conn: web::Data<DbConnection>, form: web::Form<RegisterData>) -> Result<HttpResponse, actix_web::Error> {
     if form.username.len() == 0 || form.password.len() == 0 || form.email.len() == 0 {
         return Ok(get_error("Missing username/password"));
     } 
@@ -72,17 +70,16 @@ pub async fn api_user_register(_: web::Data<NotifierComms>, db_conn: web::Data<D
         return Ok(get_error("Register failed"));
     } 
     
-    let json_resp = JsonResponse {is_error: false, message: "Register success!".to_string()};
+    let json_resp = JsonResponse {is_error: false, message: sign_jwt(user)};
     let json_resp = serde_json::to_string(&json_resp).unwrap();
     let resp = HttpResponse::Ok()
         .content_type(ContentType::json())
-        .append_header(("Set-Cookie", String::from("auth=") + sign_jwt(user).as_str()))
         .body(json_resp);
     
     return Ok(resp);
 }
 
-pub async fn api_user_create(_: web::Data<NotifierComms>, db_conn: web::Data<DbConnection>, req: HttpRequest, form: web::Form<UserInstance>) -> Result<HttpResponse, actix_web::Error> {
+pub async fn api_user_create(db_conn: web::Data<DbConnection>, req: HttpRequest, form: web::Form<UserInstance>) -> Result<HttpResponse, actix_web::Error> {
     let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 
     let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
@@ -112,7 +109,7 @@ pub async fn api_user_create(_: web::Data<NotifierComms>, db_conn: web::Data<DbC
     return Ok(success("User created!"));
 }
 
-pub async fn api_user_edit(_: web::Data<NotifierComms>, db_conn: web::Data<DbConnection>, req: HttpRequest, form: web::Form<UserInstance>) -> Result<HttpResponse, actix_web::Error> {
+pub async fn api_user_edit(db_conn: web::Data<DbConnection>, req: HttpRequest, form: web::Form<UserInstance>) -> Result<HttpResponse, actix_web::Error> {
     let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 
     let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
@@ -144,7 +141,7 @@ pub async fn api_user_edit(_: web::Data<NotifierComms>, db_conn: web::Data<DbCon
     return Ok(success("User created!"));
 }
 
-pub async fn api_get_user(_: web::Data<NotifierComms>, db_conn: web::Data<DbConnection>, req: HttpRequest, path: web::Path<(i32,)>) -> Result<HttpResponse, actix_web::Error> {
+pub async fn api_get_user(db_conn: web::Data<DbConnection>, req: HttpRequest, path: web::Path<(i32,)>) -> Result<HttpResponse, actix_web::Error> {
     let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 
     let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
@@ -180,7 +177,7 @@ pub async fn api_get_user(_: web::Data<NotifierComms>, db_conn: web::Data<DbConn
     return Ok(resp);
 }
 
-pub async fn api_delete_user(_: web::Data<NotifierComms>, db_conn: web::Data<DbConnection>, req: HttpRequest, path: web::Path<(i32,)>) -> Result<HttpResponse, actix_web::Error> {
+pub async fn api_delete_user(db_conn: web::Data<DbConnection>, req: HttpRequest, path: web::Path<(i32,)>) -> Result<HttpResponse, actix_web::Error> {
     let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 
     let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
@@ -204,7 +201,7 @@ pub async fn api_delete_user(_: web::Data<NotifierComms>, db_conn: web::Data<DbC
     return Ok(success("User deleted!"));
 }
 
-pub async fn api_filter_user(_: web::Data<NotifierComms>, db_conn: web::Data<DbConnection>, req: HttpRequest, query_str: web::Query<DbFilter<UserInstance>>) -> Result<HttpResponse, actix_web::Error> {
+pub async fn api_filter_user(db_conn: web::Data<DbConnection>, req: HttpRequest, query_str: web::Query<DbFilter<UserInstance>>) -> Result<HttpResponse, actix_web::Error> {
     let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 
     let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
@@ -215,7 +212,7 @@ pub async fn api_filter_user(_: web::Data<NotifierComms>, db_conn: web::Data<DbC
 
     let user_id = claims.get("id").unwrap_or(&"-1".to_string()).parse::<i32>().unwrap();
     let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap();
-    
+
     let filter: DbFilter<UserInstance> = DbFilter::filter_with(
         query_str.filter_instance().deep_copy(), 
         query_str.filter_by().clone()

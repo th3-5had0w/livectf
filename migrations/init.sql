@@ -2,14 +2,6 @@ CREATE DATABASE livectf;
 
 \c livectf;
 
-CREATE TABLE deploy_log (
-    id SERIAL PRIMARY KEY,
-    challenge_id INTEGER,
-    state INTEGER,
-    start_time BIGINT,
-    end_time BIGINT
-);
-
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     username TEXT UNIQUE,

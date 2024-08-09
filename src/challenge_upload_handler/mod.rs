@@ -27,14 +27,11 @@ pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>
 
 
     let comm_info = NotifierCommInfo {
-        id: Uuid::new_v4().as_u128(),
+        // id: Uuid::new_v4().as_u128(),
         name: "challenge_upload_handler".to_string(),
         broadcast_channel: notifier_sender
     };
     notifier.slaves.comm_infos.push(comm_info);
-
-
-    
 }
 
 pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, req: HttpRequest, mut payload: Multipart) -> Result<HttpResponse, actix_web::Error> {

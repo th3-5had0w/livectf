@@ -1,7 +1,7 @@
 use core::time;
 use std::{collections::{BinaryHeap, HashMap}, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread::{sleep, spawn}, time::{SystemTime, UNIX_EPOCH}};
 
-use uuid::Uuid;
+// use uuid::Uuid;
 
 use crate::{database::DbConnection, notifier::{craft_type_notify_message, Notifier, NotifierCommInfo}};
 
@@ -52,7 +52,7 @@ pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>
     };
 
     let comm_info = NotifierCommInfo {
-        id: Uuid::new_v4().as_u128(),
+        // id: Uuid::new_v4().as_u128(),
         name: "timer".to_string(),
         broadcast_channel: notifier_sender
     };
@@ -86,7 +86,7 @@ fn deserialize_data(serialized_data: &Vec<u8>) -> HashMap<&str, String> {
     return data;
 }
 
-fn cmd_enqueue(ctx: &mut TimerCtx, timer_queue: Arc<Mutex<BinaryHeap<ChallengeTimer>>>, data: &HashMap<&str, String>) {
+fn cmd_enqueue(_ctx: &mut TimerCtx, timer_queue: Arc<Mutex<BinaryHeap<ChallengeTimer>>>, data: &HashMap<&str, String>) {
     let mut queue = timer_queue.lock().expect("failed acquiring lock");
     let challenge_name = data.get("challenge_name").expect("missing challenge_name");
     let start_time = i128::from_str_radix(
@@ -98,7 +98,7 @@ fn cmd_enqueue(ctx: &mut TimerCtx, timer_queue: Arc<Mutex<BinaryHeap<ChallengeTi
     queue.push(ChallengeTimer(challenge_name.to_string(), start_time, end_time));
 }
 
-fn countdown(mut timer_queue: Arc<Mutex<BinaryHeap<ChallengeTimer>>>, sender: Sender<(String, Vec<u8>)>) {
+fn countdown(timer_queue: Arc<Mutex<BinaryHeap<ChallengeTimer>>>, sender: Sender<(String, Vec<u8>)>) {
     let mut started_challenge_queue: BinaryHeap<StartedChallenge> = BinaryHeap::new();
     loop {
         sleep(time::Duration::from_secs(60));
@@ -107,7 +107,7 @@ fn countdown(mut timer_queue: Arc<Mutex<BinaryHeap<ChallengeTimer>>>, sender: Se
             SystemTime::now().duration_since(UNIX_EPOCH).expect("back to the future!!!").as_secs()
         ).expect("Cannot convert current epoch to i128");
 
-        if (queue.len() != 0) {
+        if queue.len() != 0 {
 
             let challenge_start_time = queue.peek().expect("failed peeking timer queue").1;
 
@@ -127,7 +127,7 @@ fn countdown(mut timer_queue: Arc<Mutex<BinaryHeap<ChallengeTimer>>>, sender: Se
             }
         }
 
-        if (started_challenge_queue.len() != 0) {
+        if started_challenge_queue.len() != 0 {
             if now_epoch >= started_challenge_queue.peek().expect("failed peeking timer queue").1 {
 
                 let target_module = String::from("deployer");

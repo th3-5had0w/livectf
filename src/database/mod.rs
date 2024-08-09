@@ -1,11 +1,9 @@
 use sqlx::postgres::{PgPoolOptions, Postgres};
 use sqlx::pool::Pool;
-use user::UserInstance;
 use std::clone::Clone;
 use std::vec;
 
 pub mod user;
-pub mod deploy_log;
 pub mod solve_history;
 
 // TODO: change TEXT to VARCHAR as TEXT is slow
@@ -77,43 +75,6 @@ impl DbConnection {
 
     pub fn is_closed(&self) -> bool {
         self.pool.is_closed()
-    }
-
-    pub async fn fetch_recent_deploy_log(&self, limit: u32) -> Vec<deploy_log::DeployLogInstance>  {
-        let filter_none: DbFilter<deploy_log::DeployLogInstance> = DbFilter::<deploy_log::DeployLogInstance> {
-            filter_instance: deploy_log::DeployLogInstance {
-                id: -1,
-                challenge_id: -1,
-                state: -1,
-                start_time: -1,
-                end_time: -1
-            },
-            filter_by: Vec::new()
-        };
-
-        deploy_log::db_filter_for_deploy_log(&self, filter_none, limit as i32).await.expect(
-            "Attemp to query on a closed DB connection"
-        )
-    }
-
-    pub async fn filter_deploy_log(&self, filter: DbFilter<deploy_log::DeployLogInstance>, limit: u32) -> Vec<deploy_log::DeployLogInstance> {
-        deploy_log::db_filter_for_deploy_log(&self, filter, limit as i32).await.expect("Attemp to query on a closed DB connection")
-    }
-
-    pub async fn save_log_deploy(&self, challenge_id: i32, state: i32, start_time: i64, end_time: i64) -> bool {
-        let result: bool = deploy_log::db_insert_deploy_log(&self, &deploy_log::DeployLogInstance {
-            id: -1, // id is auto and serial, assign to shut the rust compiler's mouth
-            challenge_id,
-            state,
-            start_time,
-            end_time
-        }).await.unwrap_or(false);
-
-        return result;
-    }
-
-    pub async fn delete_deploy_log(&self, deploy_id: i32) -> bool {
-        deploy_log::db_delete_deploy_log(&self, deploy_id).await.expect("Attemp to query on a closed DB connection")
     }
 
     pub async fn get_user(&self, filter: DbFilter<user::UserInstance>, password_censor: bool) -> user::UserInstance {

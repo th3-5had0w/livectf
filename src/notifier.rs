@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Display, sync::mpsc::{Receiver, Sender}};
 
 #[derive(Clone)]
 pub struct NotifierCommInfo {
-    pub id: u128,
+    // pub id: u128,
     pub name: String,
     pub broadcast_channel: Sender<Vec<u8>>,
 }

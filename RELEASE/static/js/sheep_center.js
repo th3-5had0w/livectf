@@ -47,3 +47,33 @@ document.querySelector("#upload-challenge").addEventListener("click", async (e) 
         alert("failed to upload challenge, please check file, start/end time");
     }
 })
+
+document.querySelector("#schedule-challenge").addEventListener("click", async (e) => {
+    e.preventDefault();
+    
+    let challenge_name = document.querySelector("#challenge-name").value
+    let parsedStartTime = new Date(document.querySelector("#start-date2").value + "T" + document.querySelector("#start-time2").value + "Z");
+    let parsedEndTime = new Date(document.querySelector("#end-date2").value + "T" + document.querySelector("#end-time2").value + "Z");
+
+    parsedStartTime = Math.floor(parsedStartTime.getTime() / 1000);
+    parsedEndTime = Math.floor(parsedEndTime.getTime() / 1000);
+
+    let result = await fetch(`/api/${challenge_name}/deploy`, {
+        method: "POST",
+        mode: "cors",
+        credentials: "include",
+        headers: {
+            "X-start": parsedStartTime,
+            "X-end": parsedEndTime
+        }
+    });
+
+    result = await result.json();
+
+    if (!result.is_error) {
+        alert(result.message);
+        location.reload();
+    } else {
+        alert(result.message);
+    }
+})

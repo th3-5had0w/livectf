@@ -1,7 +1,7 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use actix_web::{App, HttpServer, web};
-use notifier::{Notifier, NotifierCommInfo, NotifierComms};
+use notifier::{Notifier, NotifierComms};
 use actix_files;
 
 mod challenge_upload_handler;
@@ -11,7 +11,7 @@ mod web_interface;
 mod flag_receiver;
 mod timer;
 mod notifier;
-
+mod utils;
 // ANYTHING RELATED TO NOTIFIER SHOULD BE CRITICAL, ABORT!!!
 
 #[actix_web::main]
@@ -44,6 +44,7 @@ async fn main() -> std::io::Result<()> {
 
 async fn webserver_loop(slaves: NotifierComms, db_conn: database::DbConnection) -> std::io::Result<()> {
 
+    // TODO: we need CSRF token to mitigate CSRF
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(slaves.clone()))
@@ -62,6 +63,7 @@ async fn webserver_loop(slaves: NotifierComms, db_conn: database::DbConnection) 
             .route("/api/user/search", web::get().to(web_interface::user::api_filter_user))
             .route("/api/challenge-upload", web::post().to(challenge_upload_handler::handle_challenge))
             .route("/submit/{challenge}/{flag}", web::post().to(flag_receiver::handle_submission))
+            .route("/api/{challenge}/{action}", web::post().to(web_interface::challenge::api_challenge_action))
             .default_service(
                 web::route().to(web_interface::not_found)
             )

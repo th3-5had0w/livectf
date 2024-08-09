@@ -17,7 +17,10 @@ btn.onclick = async (e) => {
     });
     res = await res.json();
 
+    var expires = (new Date(Date.now()+ 86400*1000)).toUTCString();
+
     if (!res["is_error"]) {
+        document.cookie = `auth=${res.message};expires=${expires}`
         window.location.replace("/");
     } else {
         alert(res["message"]);

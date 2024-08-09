@@ -1,9 +1,9 @@
 // use std::{sync::{mpsc::{self, Receiver, Sender}, Arc}, thread::spawn};
-use actix_web::{http::header::ContentType, rt, web, HttpResponse, Result as ActixResult};
+use actix_web::{http::header::ContentType, web, HttpResponse, Result as ActixResult, cookie::Cookie, HttpRequest};
 use maud::{html, Markup};
 use jwt::{SignWithKey, VerifyWithKey, Error as JWT_Error};
 use hmac::{Hmac, Mac};
-use crate::database::{deploy_log::DeployLogInstance, solve_history::SolveHistoryEntry, user::UserInstance, DbFilter};
+use crate::database::{solve_history::SolveHistoryEntry, user::UserInstance, DbFilter};
 use std::{collections::BTreeMap, os::unix::fs::MetadataExt, vec};
 use sha2::Sha256;
 use std::fs;
@@ -11,9 +11,10 @@ use chrono::{DateTime, offset::Utc};
 // use futures_util::lock::Mutex;
 // use uuid::Uuid;
 
-use crate::database::{DbConnection};
+use crate::{database::DbConnection, utils};
 
 pub mod user;
+pub mod challenge;
 
 const USER_PATH: &str = "users";
 const SOLVE_LOG_PATH: &str = "solve-logs";
@@ -202,15 +203,33 @@ pub async fn index() -> ActixResult<Markup> {
 }
 
 // TODO: add advanced search and delete feature to solve logs
-// TODO: add feature to allow admin to deploy/take down challenge manually
-// TODO: add deploy log section
-// TODO: check if user is admin
-pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<DbConnection>) -> ActixResult<Markup> {
+pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<DbConnection>, req: HttpRequest) -> ActixResult<Markup> {
     let path = page.path.clone().unwrap_or(String::from("/"));
     let mut users: Vec<UserInstance> = vec![];
     let mut solve_logs: Vec<SolveHistoryEntry> = vec![];
-    let mut challenges: Vec<(String, DateTime<Utc>, usize, usize)> = vec![];
+    let mut challenges: Vec<(String, DateTime<Utc>, usize, usize, bool)> = vec![];
     
+    let cookie: Cookie<'_> = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
+
+    let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
+
+    if claims.len() == 0 {
+        return Ok(html!(
+            script {
+                "location.href = '/';"
+            }
+        ));
+    }
+
+    let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap();
+    if is_admin == false {
+        return Ok(html!(
+            script {
+                "location.href = '/';"
+            }
+        ));
+    }
+
     if path == USER_PATH {
         users = db_conn.get_all_user().await;
     } else if path == SOLVE_LOG_PATH {
@@ -245,8 +264,8 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                 ]);
 
                 let submission_count = db_conn.filter_solve_log(filter, -1).await.len();
-
-                challenges.push((challenge_name, creation_time, solve_count, submission_count));
+                let is_up = utils::check_if_challenge_is_up(&challenge_name);
+                challenges.push((challenge_name, creation_time, solve_count, submission_count, is_up));
             }
         }
     }
@@ -268,7 +287,6 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                             a href=(format!("/sheep_center?path={}", USER_PATH)) { "Users management" }
                             a href="/sheep_center?path=challenges" { "Challenges" }
                             a href=(format!("/sheep_center?path={}", SOLVE_LOG_PATH)) { "Solve logs" }
-                            a href="/sheep_center?path=deploy-logs" { "Deploy logs" }
                         }
     
                         div class="main-section" {
@@ -345,14 +363,30 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                 }
                             } @else if path == CHALLENGE_PATH {
                                 h1 id="section-title" { "Challenges" }
-                                form class="challenge-upload-form" action="/api/challenge-upload" method="post" enctype="multipart/form-data" {
-                                    input type="date" name="start-date" id="start-date" {}
-                                    input type="time" name="start-time" id="start-time" {}
-                                    input type="date" name="end-date" id="end-date" {}
-                                    input type="time" name="end-time" id="end-time" {}
-                                    input type="file" name="challenge-file" id="fileToUpload" accept=".tar.gz" {}
-                                    button id="upload-challenge" { "upload" }
+                                div class="form-wrapper" {
+                                    form class="challenge-upload-form" method="post" enctype="multipart/form-data" {
+                                        input type="date" name="start-date" id="start-date" {}
+                                        input type="time" name="start-time" id="start-time" {}
+                                        input type="date" name="end-date" id="end-date" {}
+                                        input type="time" name="end-time" id="end-time" {}
+                                        input type="file" name="challenge-file" id="fileToUpload" accept=".tar.gz" {}
+                                        button id="upload-challenge" { "upload" }
+                                    }
+    
+                                    form class="challenge-schedule-form" method="post" {
+                                        select name="challenge-name" id="challenge-name" {
+                                            @for chall in challenges.clone() {
+                                                option value=(chall.0) { (chall.0) }
+                                            }
+                                        }
+                                        input type="date" name="start-date2" id="start-date2" {}
+                                        input type="time" name="start-time" id="start-time2" {}
+                                        input type="date" name="end-date2" id="end-date2" {}
+                                        input type="time" name="end-time2" id="end-time2" {}
+                                        button id="schedule-challenge" { "schedule" }
+                                    }
                                 }
+
                                 div class="section-wrapper" {
                                     table class="the-table" {
                                         tr {
@@ -360,6 +394,8 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                             th { "Upload Time" }
                                             th { "Solved" }
                                             th { "Submission" }
+                                            th { "Up" }
+                                            th { "Action" }
                                         }
                                         @for chall in challenges {
                                             tr {
@@ -367,6 +403,16 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                                 td { (chall.1) }
                                                 td { (chall.2) }
                                                 td { (chall.3) }
+                                                @if chall.4 {
+                                                    td { "🟢" }
+                                                    div class="action-btn-wrapper" {
+                                                        button data-challengeId=(chall.0) class="stop-btn" {
+                                                            "Stop"
+                                                        }
+                                                    }
+                                                } @else {
+                                                    td { "🔴" }
+                                                }
                                             }
                                         }
                                     }

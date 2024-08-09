@@ -66,7 +66,7 @@ pub fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>, db_co
 
     
     let comm_info = NotifierCommInfo {
-        id: Uuid::new_v4().as_u128(),
+        // id: Uuid::new_v4().as_u128(),
         name: "deployer".to_string(),
         broadcast_channel: notifier_sender
     };
@@ -107,7 +107,7 @@ fn cmd_schedule(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
                 let challenge_image = String::from_utf8(challenge_image)
                                                     .expect("failed converting docker image name")
                                                     .trim().replace("sha256:", "");
-
+                
                 ctx.challenges.push(Challenge {
                     challenge_image: challenge_image,
                     challenge_filename: challenge_filename.to_string(),

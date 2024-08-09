@@ -42,7 +42,7 @@
 }
 
 #section-title {
-    margin-bottom: 50px;
+    margin-bottom: 30px;
 }
 
 .section-wrapper {
@@ -98,7 +98,13 @@ a:hover {
     padding: 5px 10px;
 }
 
-.challenge-upload-form {
+.form-wrapper {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.challenge-upload-form, .challenge-schedule-form {
     display: flex;
     flex-direction: column;
     width: 200px;
