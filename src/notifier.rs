@@ -134,6 +134,11 @@ pub fn craft_type_notify_message<T: Display>(target_module: &String, args: &[T])
                     data.insert("end_time", args[3].to_string());
                 },
 
+                "deploy_info" => {
+                    data.insert("challenge_name", args[1].to_string());
+                    data.insert("deploy_status", args[2].to_string());
+                }
+
                 _ => {
                     panic!("unknown command");
                 }

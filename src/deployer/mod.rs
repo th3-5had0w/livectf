@@ -154,6 +154,12 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
         ctx.sender.send((target_module, data)).expect("deployer cannot send");
 
     } else {
+
+        let target_module = String::from_str("timer").unwrap();
+        let cmd = String::from_str("deploy_info").unwrap();
+        let data = notifier::craft_type_notify_message(&target_module, &[cmd, challenge_filename.to_string(), "fail".to_string()]);
+        ctx.sender.send((target_module, data)).expect("deployer cannot send");
+        ctx.challenges.retain(|challenge| &challenge.challenge_filename != challenge_filename);
         println!("deploy failed");
     }
 }
