@@ -329,32 +329,32 @@ pub async fn db_get_all_user(db_connection: &DbConnection) -> Vec<UserInstance> 
     return result;
 }
 
-pub async fn db_get_user_by_id(db_connection: &DbConnection, user_id: i32) -> Result<UserInstance, sqlx::Error> {
-    let query = format!("
-    SELECT 
-        id,
-        username,
-        password,
-        email,
-        challenge_solved,
-        bio,
-        is_locked,
-        lock_due_at,
-        is_admin
-    FROM 
-        {table_name}
-    WHERE 
-        id=$1;",
-        table_name=DB_USER_TABLE
-    );
+// pub async fn db_get_user_by_id(db_connection: &DbConnection, user_id: i32) -> Result<UserInstance, sqlx::Error> {
+//     let query = format!("
+//     SELECT 
+//         id,
+//         username,
+//         password,
+//         email,
+//         challenge_solved,
+//         bio,
+//         is_locked,
+//         lock_due_at,
+//         is_admin
+//     FROM 
+//         {table_name}
+//     WHERE 
+//         id=$1;",
+//         table_name=DB_USER_TABLE
+//     );
 
 
-    let user = sqlx::query_as(&query[..])
-        .bind(user_id)
-        .fetch_one(&db_connection.pool).await.unwrap_or(UserInstance::get_dead_guy_user());
+//     let user = sqlx::query_as(&query[..])
+//         .bind(user_id)
+//         .fetch_one(&db_connection.pool).await.unwrap_or(UserInstance::get_dead_guy_user());
     
-    return Ok(user);
-}
+//     return Ok(user);
+// }
 
 pub async fn db_get_user_by_name(db_connection: &DbConnection, name: String) -> Result<UserInstance, sqlx::Error> {
     let query = format!("
@@ -383,29 +383,29 @@ pub async fn db_get_user_by_name(db_connection: &DbConnection, name: String) -> 
     return Ok(user);
 }
 
-pub async fn db_get_all_user_solved_challenge(db_connection: &DbConnection, challenge_name: String) -> Vec<UserInstance> {
-    let query = format!("
-    SELECT 
-        id,
-        username,
-        password,
-        email,
-        challenge_solved,
-        bio,
-        is_locked,
-        lock_due_at,
-        is_admin
-    FROM 
-        {table_name}
-    WHERE 
-        $1 = ANY (challenge_solved);",
-        table_name=DB_USER_TABLE
-    );
+// pub async fn db_get_all_user_solved_challenge(db_connection: &DbConnection, challenge_name: String) -> Vec<UserInstance> {
+//     let query = format!("
+//     SELECT 
+//         id,
+//         username,
+//         password,
+//         email,
+//         challenge_solved,
+//         bio,
+//         is_locked,
+//         lock_due_at,
+//         is_admin
+//     FROM 
+//         {table_name}
+//     WHERE 
+//         $1 = ANY (challenge_solved);",
+//         table_name=DB_USER_TABLE
+//     );
 
 
-    let users = sqlx::query_as(&query[..])
-        .bind(challenge_name)
-        .fetch_all(&db_connection.pool).await.unwrap_or(vec![]);
+//     let users = sqlx::query_as(&query[..])
+//         .bind(challenge_name)
+//         .fetch_all(&db_connection.pool).await.unwrap_or(vec![]);
     
-    return users;
-}
+//     return users;
+// }

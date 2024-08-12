@@ -1,7 +1,7 @@
 // use std::{sync::{mpsc::{self, Receiver, Sender}, Arc}, thread::spawn};
 use actix_web::{http::header::ContentType, web, HttpResponse, Result as ActixResult, cookie::Cookie, HttpRequest};
 use maud::{html, Markup};
-use jwt::{Error as JWT_Error, SignWithKey, Store, VerifyWithKey};
+use jwt::{Error as JWT_Error, SignWithKey, VerifyWithKey};
 use hmac::{Hmac, Mac};
 use crate::database::{solve_history::SolveHistoryEntry, user::UserInstance, DbFilter};
 use std::{collections::BTreeMap, os::unix::fs::MetadataExt, vec};
@@ -193,7 +193,10 @@ pub async fn index() -> ActixResult<Markup> {
             body {
                 div class="container" {
                     img src="/static/img/cosgang.jpg" id="cosgang-avt" {}
-                    h1 { "Under construction! Stay turned hackers." }
+                    div class="nav-bar" {
+                        a href="/scoreboard" { "Scoreboard" }
+                        a href="/challenges" { "Challenges" }
+                    }
                 }
             }
         }
@@ -428,7 +431,7 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
 }
 
 
-pub async fn challenges(page: web::Query<PaginationQuery>, db_conn: web::Data<DbConnection>, req: HttpRequest) -> ActixResult<Markup> {
+pub async fn challenges(db_conn: web::Data<DbConnection>, req: HttpRequest) -> ActixResult<Markup> {
     let challs = db_conn.db_get_all_running_challenges().await;
 
     let cookie: Cookie<'_> = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
@@ -516,3 +519,64 @@ pub async fn challenges(page: web::Query<PaginationQuery>, db_conn: web::Data<Db
     ))
 }
 
+pub async fn scoreboard(db_conn: web::Data<DbConnection>, req: HttpRequest) -> ActixResult<Markup> {
+    let cookie: Cookie<'_> = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
+
+    let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
+
+    if claims.len() == 0 {
+        return Ok(html!(
+            script {
+                "location.href = '/login';"
+            }
+        ));
+    }
+
+    let username = claims.get("username").unwrap();
+    let users = db_conn.get_all_user().await;
+    let scoreboard_users = utils::get_scoreboard_from_user_vec(db_conn.do_clone(), users).await;
+
+    Ok(html!(
+        html {
+            head {
+                link rel="stylesheet" href="/static/css/styles.css" {}
+                link rel="stylesheet" href="/static/css/styles_scoreboard.css" {}
+                meta charset="utf-8" {}
+                title {
+                    "CoSGang livectf - Scoreboard"
+                }
+            }
+            body {
+                div class="container" {
+                    h1 style="margin-bottom: 20px;" { "Scoreboard" }
+                    div class="wrapper" {
+                        table class="scoreboard" {
+                            tr {
+                                th class="place-col" { "Place" }
+                                th class="username-col" { "Username" }
+                                th class="score-col" { "Score" }
+                            }
+                            @for user in scoreboard_users {
+                                @if user.username == username.to_string() {
+                                    tr class="is-self" {
+                                        td class="place-col" { (user.place) }
+                                        td class="username-col" { (user.username) }
+                                        td class="score-col" { (user.score) }
+                                    }
+                                } @else {
+                                    tr {
+                                        td class="place-col" { (user.place) }
+                                        td class="username-col" { (user.username) }
+                                        td class="score-col" { (user.score) }
+                                    }
+                                }
+                            }
+                            
+                        }
+                    }
+                }
+            }
+            script src="/static/js/challenges.js" {}
+        }
+    ))
+}

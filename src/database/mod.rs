@@ -4,8 +4,6 @@ use sqlx::pool::Pool;
 use std::clone::Clone;
 use std::vec;
 
-use crate::web_interface::challenges;
-
 pub mod user;
 pub mod solve_history;
 pub mod challenge;
@@ -96,11 +94,11 @@ impl DbConnection {
         user.censor_password(password_censor)
     }
 
-    pub async fn get_user_by_id(&self, user_id: i32, password_censor: bool) -> user::UserInstance {
-        let found_user: user::UserInstance = user::db_get_user_by_id(&self, user_id).await.unwrap();
+    // pub async fn get_user_by_id(&self, user_id: i32, password_censor: bool) -> user::UserInstance {
+    //     let found_user: user::UserInstance = user::db_get_user_by_id(&self, user_id).await.unwrap();
 
-        found_user.censor_password(password_censor)
-    }
+    //     found_user.censor_password(password_censor)
+    // }
 
     pub async fn filter_user(&self, filter: DbFilter<user::UserInstance>) -> Vec<user::UserInstance> {
         let users: Vec<user::UserInstance> = user::db_filter_for_user(&self, filter, 1).await.unwrap_or(
@@ -186,11 +184,11 @@ impl DbConnection {
         )
     }
 
-    pub async fn delete_solve_log(&self, solve_id: i32) -> bool {
-        solve_history::db_delete_solve_result(&self, solve_id).await.expect(
-            "Can't delete log"
-        )
-    }
+    // pub async fn delete_solve_log(&self, solve_id: i32) -> bool {
+    //     solve_history::db_delete_solve_result(&self, solve_id).await.expect(
+    //         "Can't delete log"
+    //     )
+    // }
 
     pub async fn get_challenge_score(&self, name: String) -> i32 {
         challenge::db_get_challenge_score(&self, name).await

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::format, fs::File, io::Write, process::Command, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
+use std::{collections::HashMap, fs::File, io::Write, process::Command, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
 
 use rand::Rng;
 use uuid::Uuid;

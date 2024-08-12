@@ -1,5 +1,15 @@
 use std::{process::Command, fs};
-use std::time::{self, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use crate::database::user::UserInstance;
+use crate::database::DbConnection;
+
+#[derive(Clone)]
+pub struct ScoreBoardUser {
+    pub place: i32,
+    pub username: String,
+    pub score: u64
+}
 
 const MIN_START_TIME: i128 = 60 * 1;
 const MAX_START_TIME: i128 = 3600 * 24 * 7;
@@ -54,4 +64,37 @@ pub fn is_time_schedule_valid(start_time: i128, end_time: i128) -> bool {
     }
 
     return true;
+}
+
+pub async fn get_scoreboard_from_user_vec(db_conn: DbConnection, users: Vec<UserInstance>) -> Vec<ScoreBoardUser> {
+
+    let mut scoreboard_users: Vec<ScoreBoardUser> = vec![];
+
+    for user in users {
+        let mut total_score: u64 = 0;
+        for chall_name in user.challenge_solved {
+            total_score += u64::try_from(db_conn.get_challenge_score(chall_name).await).unwrap();
+        }
+
+        scoreboard_users.push(ScoreBoardUser {
+            place: 0,
+            username: user.username,
+            score: total_score
+        });
+    }
+
+    scoreboard_users.sort_by(|a, b| a.score.cmp(&b.score).reverse());
+
+    let mut i: usize = 1;
+    let mut final_scoreboard_users: Vec<ScoreBoardUser> = vec![];
+    while i <= scoreboard_users.len() {
+        let user = scoreboard_users.get(i-1).unwrap();
+        let mut user = user.clone();
+
+        user.place = i32::try_from(i).unwrap();
+        final_scoreboard_users.push(user);
+        i += 1;
+    }
+
+    final_scoreboard_users.to_vec()
 }
