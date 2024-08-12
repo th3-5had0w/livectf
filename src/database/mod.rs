@@ -206,8 +206,12 @@ impl DbConnection {
         challenge::db_set_challenge_connection_string(&self, name, connection_string).await
     }
 
-    pub async fn db_get_all_running_challenges(&self) -> Vec<ChallengeData> {
+    pub async fn get_all_running_challenges(&self) -> Vec<ChallengeData> {
         challenge::db_get_all_running_challenges(&self).await
+    }
+
+    pub async fn get_challenge_by_name(&self, name: String) -> ChallengeData {
+        challenge::db_get_challenge_by_name(&self, name).await
     }
 }
 

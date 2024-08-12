@@ -432,7 +432,7 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
 
 
 pub async fn challenges(db_conn: web::Data<DbConnection>, req: HttpRequest) -> ActixResult<Markup> {
-    let challs = db_conn.db_get_all_running_challenges().await;
+    let challs = db_conn.get_all_running_challenges().await;
 
     let cookie: Cookie<'_> = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 

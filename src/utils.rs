@@ -73,7 +73,10 @@ pub async fn get_scoreboard_from_user_vec(db_conn: DbConnection, users: Vec<User
     for user in users {
         let mut total_score: u64 = 0;
         for chall_name in user.challenge_solved {
-            total_score += u64::try_from(db_conn.get_challenge_score(chall_name).await).unwrap();
+            let chall = db_conn.get_challenge_by_name(chall_name).await;
+            if chall.running {
+                total_score += u64::try_from(chall.score).unwrap();
+            }
         }
 
         scoreboard_users.push(ScoreBoardUser {
