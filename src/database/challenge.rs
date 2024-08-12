@@ -7,7 +7,8 @@ use crate::database::{DbConnection, DB_CHALLENGE_TABLE};
 
 const MINIMUM_SCORE: i32 = 50;
 const INITIAL_SCORE: i32 = 500;
-const DECAY_VALUE: i32 = 25;
+// lower this makes score decay faster
+const DECAY_VALUE: i32 = 300;
 const SOLVES_BEFORE_DECAY: i32 = 1;
 
 #[derive(FromRow)]

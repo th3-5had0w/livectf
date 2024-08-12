@@ -1,15 +1,37 @@
 use std::{process::Command, fs};
 use std::time::{SystemTime, UNIX_EPOCH};
+use core::cmp::Ordering;
 
 use crate::database::user::UserInstance;
 use crate::database::DbConnection;
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq, Ord)]
 pub struct ScoreBoardUser {
     pub place: i32,
     pub username: String,
-    pub score: u64
+    pub score: u64,
+    pub last_submission: i128
 }
+
+// impl Ord for ScoreBoardUser {
+//     fn cmp(&self, other: &Self) -> Ordering {
+//         self.score
+//             .cmp(&other.score)
+//             .then(self.last_submission.cmp(&other.last_submission).reverse())
+//             //now what?
+//     }
+// }
+
+impl PartialOrd for ScoreBoardUser {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.score
+            .cmp(&other.score).reverse()
+            .then(self.last_submission.cmp(&other.last_submission))
+        )
+    }
+}
+
+
 
 const MIN_START_TIME: i128 = 60 * 1;
 const MAX_START_TIME: i128 = 3600 * 24 * 7;
@@ -82,12 +104,14 @@ pub async fn get_scoreboard_from_user_vec(db_conn: DbConnection, users: Vec<User
         scoreboard_users.push(ScoreBoardUser {
             place: 0,
             username: user.username,
-            score: total_score
+            score: total_score,
+            last_submission: i128::from(user.last_submission)
         });
     }
 
-    scoreboard_users.sort_by(|a, b| a.score.cmp(&b.score).reverse());
+    // scoreboard_users.sort_by(|a, b| a.score.cmp(&b.score).reverse());
 
+    scoreboard_users.sort();
     let mut i: usize = 1;
     let mut final_scoreboard_users: Vec<ScoreBoardUser> = vec![];
     while i <= scoreboard_users.len() {

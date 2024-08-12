@@ -103,21 +103,21 @@ pub async fn db_save_solve_result(db_connection: &DbConnection, solve_entry: Sol
     return Ok(false);
 }
 
-pub async fn db_delete_solve_result(db_connection: &DbConnection, solve_id: i32) -> Result<bool, DbError> {
-    if db_connection.is_closed() {
-        return Err(DbError::ConnectionAlreadyClosed);
-    } else {
-        let query = format!("DELETE FROM {table_name} WHERE id = $1", table_name=DB_SOLVE_HISTORY_TABLE);
-            let result: PgQueryResult = sqlx::query(&query[..])
-            .bind(solve_id)
-            .execute(&db_connection.pool).await.unwrap();
+// pub async fn db_delete_solve_result(db_connection: &DbConnection, solve_id: i32) -> Result<bool, DbError> {
+//     if db_connection.is_closed() {
+//         return Err(DbError::ConnectionAlreadyClosed);
+//     } else {
+//         let query = format!("DELETE FROM {table_name} WHERE id = $1", table_name=DB_SOLVE_HISTORY_TABLE);
+//             let result: PgQueryResult = sqlx::query(&query[..])
+//             .bind(solve_id)
+//             .execute(&db_connection.pool).await.unwrap();
 
-        if result.rows_affected() > 0 {
-            return Ok(true);
-        }
-        return Ok(false);
-    }
-}
+//         if result.rows_affected() > 0 {
+//             return Ok(true);
+//         }
+//         return Ok(false);
+//     }
+// }
 
 pub async fn db_filter_for_solve_history(
     db_connection: &DbConnection, 

@@ -45,12 +45,13 @@ document.querySelector("#upload-challenge").addEventListener("click", async (e) 
         }
     });
 
-    result = await result.text();
+    result = await result.json();
 
-    if (result.indexOf("File uploaded successfully") != -1) {
+    if (!result.is_error) {
+        alert(result.message);
         location.reload();
     } else {
-        alert("failed to upload challenge, please check file, start/end time");
+        alert(result.message);
     }
 })
 

@@ -1,15 +1,16 @@
-use actix_web::{web, HttpRequest, HttpResponse};
+use actix_web::{web, HttpRequest, HttpResponse, cookie::Cookie};
 use actix_multipart::Multipart;
 use futures_util::{StreamExt, TryStreamExt};
 use uuid::Uuid;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::io::Write;
 use std::fs::{File, copy};
+use std::collections::BTreeMap;
 
 use crate::notifier::{craft_type_notify_message, Notifier, NotifierCommInfo, NotifierComms};
 use crate::database::{challenge, DbConnection};
 use crate::utils::{is_time_schedule_valid, MAGIC_TIME};
-
+use crate::web_interface::{get_error, success, get_jwt_claims, forbiden, unauthorized};
 struct ChallengeUploadHandlerCtx {
     sender: Sender<(String, Vec<u8>)>,
     listener: Receiver<Vec<u8>>,
@@ -36,6 +37,19 @@ pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>
 
 pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, db_conn: web::Data<DbConnection>, req: HttpRequest, mut payload: Multipart) -> Result<HttpResponse, actix_web::Error> {
 
+    let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
+
+    let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
+
+    if claims.len() == 0 {
+        return Ok(forbiden("Not authenticated"));
+    }
+
+    let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap();
+    if is_admin == false {
+        return Ok(unauthorized("You are not admin"));
+    }
+
     let start_time_header = req.headers().get("X-start");
     let end_time_header = req.headers().get("X-end");
 
@@ -56,7 +70,7 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, db_conn: 
     };
 
     if !is_time_schedule_valid(start_time, end_time) {
-        return Ok(HttpResponse::BadRequest().body(format!("Please adjust start_time/end_time")));
+        return Ok(get_error("Please adjust start_time/end_time"));
     }
 
     while let Some(mut field) = payload.try_next().await? {
@@ -87,13 +101,13 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, db_conn: 
             };
             if db_conn.store_challenge_metadata(chall).await {
                 if copy(filepath.to_string(), format!("./attachments/{}.tar.gz", filename))
-                    .expect("cannot copy to attachments") > 0 {
-                        return Ok(HttpResponse::Ok().body(format!("Failed to copy to attachments: {}", filepath)));
+                    .expect("cannot copy to attachments") == 0 {
+                        return Ok(get_error(&format!("Failed to copy to attachments: {}", filepath)));
                 };
-                return Ok(HttpResponse::Ok().body(format!("File uploaded successfully: {}", filepath)));
+                return Ok(success(&format!("File uploaded successfully: {}", filepath)));
             }
 
-            return Ok(HttpResponse::Ok().body(format!("Failed to store challenge to database: {}", filename)));
+            return Ok(success(&format!("Failed to store challenge to database: {}", filename)));
         }
     }
 

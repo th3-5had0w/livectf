@@ -17,6 +17,7 @@ pub struct UserInstance {
     pub is_locked: bool,
     pub lock_due_at: i64,
     pub is_admin: bool,
+    pub last_submission: i64
 }
 
 impl UserInstance {
@@ -36,6 +37,7 @@ impl UserInstance {
             is_locked: false,
             lock_due_at: 0,
             is_admin,
+            last_submission: 0
         }
     } 
 
@@ -55,6 +57,7 @@ impl UserInstance {
             is_locked: self.is_locked,
             lock_due_at: self.lock_due_at,
             is_admin: self.is_admin,
+            last_submission: 0
         }
     }
 
@@ -79,6 +82,7 @@ impl UserInstance {
             is_locked: false,
             lock_due_at: 0,
             is_admin: false,
+            last_submission: 0
         }
     }
 
@@ -160,7 +164,8 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
         bio,
         is_locked,
         lock_due_at,
-        is_admin
+        is_admin,
+        last_submission
     FROM 
         {table_name}
     {filter_statement}
@@ -193,7 +198,8 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
             bio,
             is_locked,
             lock_due_at,
-            is_admin
+            is_admin,
+            last_submission
         )
     =
         (
@@ -204,9 +210,10 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
             $5,
             $6,
             $7,
-            $8
+            $8,
+            $9
         )
-    WHERE id = $9
+    WHERE id = $10
     ", table_name=DB_USER_TABLE);
     let result: PgQueryResult = sqlx::query(&query[..])
         .bind(user.username)
@@ -217,6 +224,7 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
         .bind(user.is_locked)
         .bind(user.lock_due_at)
         .bind(user.is_admin)
+        .bind(user.last_submission)
         .bind(user.id)
         .execute(&db_connection.pool).await.unwrap();
 
@@ -249,7 +257,8 @@ pub async fn db_user_login(db_connection: &DbConnection, username: &str, passwor
         bio,
         is_locked,
         lock_due_at,
-        is_admin
+        is_admin,
+        last_submission
     FROM 
         {table_name}
     WHERE 
@@ -265,7 +274,7 @@ pub async fn db_user_login(db_connection: &DbConnection, username: &str, passwor
         });
     
     let result = bcrypt_verify(password, &user.password[..]).unwrap_or(false);
-
+    
     if result {
         return Ok(user);
     } else {
@@ -283,7 +292,8 @@ pub async fn db_user_register(db_connection: &DbConnection, user: UserInstance) 
         bio,
         is_locked,
         lock_due_at,
-        is_admin
+        is_admin,
+        last_submission
     )
     VALUES
         (
@@ -294,7 +304,8 @@ pub async fn db_user_register(db_connection: &DbConnection, user: UserInstance) 
             $5,
             $6,
             $7,
-            $8
+            $8,
+            $9
         );", table_name=DB_USER_TABLE);
         let result: PgQueryResult = sqlx::query(&query[..])
         .bind(user.username.trim())
@@ -305,6 +316,7 @@ pub async fn db_user_register(db_connection: &DbConnection, user: UserInstance) 
         .bind(user.is_locked)
         .bind(user.lock_due_at)
         .bind(user.is_admin)
+        .bind(user.last_submission)
         .execute(&db_connection.pool).await?;
 
     if result.rows_affected() > 0 {
@@ -367,7 +379,8 @@ pub async fn db_get_user_by_name(db_connection: &DbConnection, name: String) -> 
         bio,
         is_locked,
         lock_due_at,
-        is_admin
+        is_admin,
+        last_submission
     FROM 
         {table_name}
     WHERE 

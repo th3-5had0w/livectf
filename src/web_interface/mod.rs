@@ -253,7 +253,7 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                     (String::from("is_success"), String::from("="))
                 ]);
                
-                let solve_count = db_conn.filter_solve_log(filter, -1).await.len();
+                let solve_count = db_conn.get_challenge_by_name(challenge_name.to_string()).await.solved_by.len();
 
                 let filter = DbFilter::filter_with(SolveHistoryEntry::new(
                     String::from("test"),

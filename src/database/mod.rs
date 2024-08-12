@@ -3,6 +3,7 @@ use sqlx::postgres::{PgPoolOptions, Postgres};
 use sqlx::pool::Pool;
 use std::clone::Clone;
 use std::vec;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub mod user;
 pub mod solve_history;
@@ -132,7 +133,7 @@ impl DbConnection {
         let mut found_user = 
             user::db_get_user_by_name(&self, username).await.unwrap_or(user::UserInstance::get_dead_guy_user());
 
-        if found_user.id == -1 {
+        if found_user.id == -1 || found_user.challenge_solved.contains(&challenge_name) {
             return false;
         }
 
@@ -141,6 +142,8 @@ impl DbConnection {
         if !chall.running {
             return false;
         }
+
+        found_user.last_submission = SystemTime::now().duration_since(UNIX_EPOCH).expect("back to the future!!!").as_secs() as i64;
 
         challenge::db_challenge_solve(&self, challenge_name.to_string(), found_user.username.clone()).await;
         found_user.challenge_solved.push(chall.challenge_name);
