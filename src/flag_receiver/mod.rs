@@ -63,7 +63,7 @@ fn deserialize_data(serialized_data: &Vec<u8>) -> HashMap<&str, String> {
     return data;
 }
 
-pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path<(String,String)>, req: HttpRequest) -> Result<HttpResponse, actix_web::Error> {
+pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path<(String,)>, req: HttpRequest) -> Result<HttpResponse, actix_web::Error> {
     let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 
     let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
@@ -96,13 +96,18 @@ fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
         // TODO: add score to user and decay challenge's score
         if &submitted_flag == flag {
             let solve_history = SolveHistoryEntry::new(
-                username,
+                username.clone(),
                 challenge_name.clone(),
                 true,
                 submitted_flag
             );
-    
-            println!("saving history");
+            
+            rt.block_on(ctx.db_conn.user_add_score(
+                username, 
+                challenge_name.clone()
+                )
+            );
+            
             rt.block_on(ctx.db_conn.log_solve_result(solve_history));    
             return;
         }
@@ -114,8 +119,6 @@ fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
         false,
         submitted_flag
     );
-
-    println!("saving history");
 
     rt.block_on(ctx.db_conn.log_solve_result(solve_history));
 }

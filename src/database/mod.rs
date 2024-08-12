@@ -1,7 +1,10 @@
+use challenge::ChallengeData;
 use sqlx::postgres::{PgPoolOptions, Postgres};
 use sqlx::pool::Pool;
 use std::clone::Clone;
 use std::vec;
+
+use crate::web_interface::challenges;
 
 pub mod user;
 pub mod solve_history;
@@ -127,10 +130,22 @@ impl DbConnection {
         return result;
     }
 
-    pub async fn user_add_score(&self, user_id: i32, how_many: i32) -> bool {
-        let mut found_user = self.get_user_by_id(user_id, true).await;
+    pub async fn user_add_score(&self, username: String, challenge_name: String) -> bool {
+        let mut found_user = 
+            user::db_get_user_by_name(&self, username).await.unwrap_or(user::UserInstance::get_dead_guy_user());
 
-        found_user.score += how_many;
+        if found_user.id == -1 {
+            return false;
+        }
+
+        let chall = challenge::db_get_challenge_by_name(&self, challenge_name.to_string()).await;
+
+        if !chall.running {
+            return false;
+        }
+
+        challenge::db_challenge_solve(&self, challenge_name.to_string(), found_user.username.clone()).await;
+        found_user.challenge_solved.push(chall.challenge_name);
         self.edit_user(found_user).await
     }
 
@@ -175,6 +190,26 @@ impl DbConnection {
         solve_history::db_delete_solve_result(&self, solve_id).await.expect(
             "Can't delete log"
         )
+    }
+
+    pub async fn get_challenge_score(&self, name: String) -> i32 {
+        challenge::db_get_challenge_score(&self, name).await
+    }
+
+    pub async fn store_challenge_metadata(&self, chall: ChallengeData) -> bool {
+        challenge::db_store_challenge_metadata(&self, chall).await
+    }
+
+    pub async fn set_challenge_running(&self, name: String, is_running: bool) -> bool {
+        challenge::db_set_challenge_running(&self, name, is_running).await
+    }
+
+    pub async fn set_challenge_connection_string(&self, name: String, connection_string: String) -> bool {
+        challenge::db_set_challenge_connection_string(&self, name, connection_string).await
+    }
+
+    pub async fn db_get_all_running_challenges(&self) -> Vec<ChallengeData> {
+        challenge::db_get_all_running_challenges(&self).await
     }
 }
 

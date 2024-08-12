@@ -17,6 +17,12 @@ Array.from(document.querySelectorAll(".del-btn")).map(btn => {
     }
 })
 
+Array.from(document.querySelectorAll(".ban-btn")).map(btn => {
+    btn.onclick = async (e) => {
+        alert("Banning feature is comming up soon...");
+    }
+})
+
 document.querySelector("#upload-challenge").addEventListener("click", async (e) => {
     const data = new FormData(document.querySelector(".challenge-upload-form"));
 
@@ -76,4 +82,21 @@ document.querySelector("#schedule-challenge").addEventListener("click", async (e
     } else {
         alert(result.message);
     }
-})
+});
+
+document.querySelector("#stop-btn").addEventListener("click", async (e) => {
+    const challenge_name = e.target.getAttribute("data-challengeid");
+    let res = await fetch(`/api/${challenge_name}/destroy`, {
+        method: "POST",
+        credentials: "include",
+        mode: "cors"
+    });
+
+    res = await res.json();
+
+    if (res.is_error) {
+        alert(res.message);
+    } else {
+        location.reload();
+    }
+});

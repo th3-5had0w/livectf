@@ -28,13 +28,13 @@ pub async fn api_user_login(db_conn: web::Data<DbConnection>, form: web::Form<Lo
         form.password.as_str()
     ).await;
     
-    if user.id() == -1 {
+    if user.id == -1 {
         return Ok(forbiden("Login failed"));
     } 
 
-    if user.is_locked() {
+    if user.is_locked {
         let now = chrono::offset::Utc::now().timestamp();
-        if user.raw_lock_due_at() <= now {
+        if user.lock_due_at <= now {
             user.unlock();
         } else {
 
@@ -94,7 +94,7 @@ pub async fn api_user_create(db_conn: web::Data<DbConnection>, req: HttpRequest,
     }
 
     let re = Regex::new(r"^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]+$").unwrap();
-    let matches = re.captures(form.email());
+    let matches = re.captures(form.email.as_str());
 
     if matches.is_none() {
         return Ok(get_error("Invalid email"));
@@ -121,12 +121,12 @@ pub async fn api_user_edit(db_conn: web::Data<DbConnection>, req: HttpRequest, f
     let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap();
     let user_id = claims.get("id").unwrap_or(&"-1".to_string()).parse::<i32>().unwrap();
 
-    if is_admin == false && form.id() != user_id {
+    if is_admin == false && form.id != user_id {
         return Ok(forbiden("You can't edit this user"));
     }
 
     let re = Regex::new(r"^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]+$").unwrap();
-    let matches = re.captures(form.email());
+    let matches = re.captures(form.email.as_str());
 
     if matches.is_none() {
         return Ok(get_error("Invalid email"));
@@ -165,7 +165,7 @@ pub async fn api_get_user(db_conn: web::Data<DbConnection>, req: HttpRequest, pa
 
     let result = db_conn.get_user(filter, should_censor).await;
     
-    if result.id() == -1 {
+    if result.id == -1 {
         return Ok(get_error("That user does not exist!"));
     } 
     
@@ -221,7 +221,7 @@ pub async fn api_filter_user(db_conn: web::Data<DbConnection>, req: HttpRequest,
     let result = db_conn.filter_user(filter).await;
     let mut final_result: Vec<UserInstance> = vec![];
     for user in &result {
-        if user_id != user.id() {
+        if user_id != user.id {
             if is_admin {
                 final_result.push(user.censor_password(true))
             } else {

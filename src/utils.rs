@@ -1,4 +1,12 @@
 use std::{process::Command, fs};
+use std::time::{self, SystemTime, UNIX_EPOCH};
+
+const MIN_START_TIME: i128 = 60 * 1;
+const MAX_START_TIME: i128 = 3600 * 24 * 7;
+const MAX_TIME_CHALLENGE: i128 = 60 * 1;
+// i'm not sure why but if you subtract the time sent by client by this value, 
+// the time will be correct :D
+pub const MAGIC_TIME: i128 = 25188;
 
 pub fn check_if_challenge_is_up(challenge_name: &String) -> bool {
     let output = Command::new("docker")
@@ -26,4 +34,24 @@ pub fn is_challenge_exists(challenge_name: &String) -> bool {
         }
     } 
     return false;
+}
+
+pub fn is_time_schedule_valid(start_time: i128, end_time: i128) -> bool {
+    let now_epoch = i128::try_from(
+        SystemTime::now().duration_since(UNIX_EPOCH).expect("back to the future!!!").as_secs()
+    ).expect("Cannot convert current epoch to i128");
+
+    if start_time < now_epoch + MIN_START_TIME {
+        return false;
+    }
+
+    if start_time > now_epoch + MAX_START_TIME {
+        return false;
+    }
+
+    if end_time < start_time + MAX_TIME_CHALLENGE {
+        return false;
+    }
+
+    return true;
 }

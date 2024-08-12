@@ -1,26 +1,36 @@
+use std::vec;
+
 use sqlx::postgres::PgQueryResult;
-use sqlx::{FromRow, Decode};
-use chrono::DateTime;
-use chrono::offset::Utc;
+use sqlx::FromRow;
 
-use crate::database::{DbConnection, DbError, DbFilter, DB_CHALLENGE_TABLE};
+use crate::database::{DbConnection, DB_CHALLENGE_TABLE};
 
+#[derive(FromRow)]
 pub struct ChallengeData {
     pub id: i32,
     pub challenge_name: String,
     pub score: i32,
     pub category: String,
-    pub solved_by: Vec<String>
+    pub solved_by: Vec<String>,
+    pub running: bool,
+    pub connection_string: String
 }
 
-pub async fn db_store_challenge_metadata(db_connection: DbConnection, challenge: ChallengeData) -> bool {
+#[derive(FromRow)]
+struct ScoreStruct {
+    score: i32
+}
+
+pub async fn db_store_challenge_metadata(db_connection: &DbConnection, challenge: ChallengeData) -> bool {
     let no_one_solved: Vec<String> = vec![];
     let query = format!("
     INSERT INTO {table_name} (
         challenge_name,
         score,
         category,
-        solved_by
+        solved_by,
+        running,
+        connection_string
     )
     VALUES
         (
@@ -28,12 +38,16 @@ pub async fn db_store_challenge_metadata(db_connection: DbConnection, challenge:
             $2,
             $3,
             $4,
+            $5,
+            $6
         );", table_name=DB_CHALLENGE_TABLE);
         let result: PgQueryResult = sqlx::query(&query[..])
         .bind(challenge.challenge_name.trim())
         .bind(challenge.score)
         .bind(challenge.category)
         .bind(no_one_solved)
+        .bind(false)
+        .bind(challenge.connection_string)
         .execute(&db_connection.pool).await.expect("Error storing challenge metadata");
 
     if result.rows_affected() > 0 {
@@ -42,14 +56,16 @@ pub async fn db_store_challenge_metadata(db_connection: DbConnection, challenge:
     return false;
 } 
 
-pub async fn db_decay_challenge(db_connection: DbConnection, challenge: ChallengeData) -> bool {
+pub async fn db_decay_challenge(db_connection: &DbConnection, challenge: ChallengeData) -> bool {
     let no_one_solved: Vec<String> = vec![];
     let query = format!("
     INSERT INTO {table_name} (
         challenge_name,
         score,
         category,
-        solved_by
+        solved_by,
+        running,
+        connection_string
     )
     VALUES
         (
@@ -57,12 +73,16 @@ pub async fn db_decay_challenge(db_connection: DbConnection, challenge: Challeng
             $2,
             $3,
             $4,
+            $5,
+            $6
         );", table_name=DB_CHALLENGE_TABLE);
         let result: PgQueryResult = sqlx::query(&query[..])
         .bind(challenge.challenge_name.trim())
         .bind(challenge.score)
         .bind(challenge.category)
         .bind(no_one_solved)
+        .bind(false)
+        .bind(challenge.connection_string)
         .execute(&db_connection.pool).await.expect("Error storing challenge metadata");
 
     if result.rows_affected() > 0 {
@@ -70,3 +90,113 @@ pub async fn db_decay_challenge(db_connection: DbConnection, challenge: Challeng
     }
     return false;
 } 
+
+pub async fn db_get_challenge_score(db_connection: &DbConnection, name: String) -> i32 {
+    let query = format!("SELECT score FROM {table_name} WHERE challenge_name=$1;", table_name=DB_CHALLENGE_TABLE);
+
+
+    let res: ScoreStruct = sqlx::query_as(&query[..])
+        .bind(name.trim())
+        .fetch_one(&db_connection.pool).await.unwrap_or(ScoreStruct { score: 0});
+    
+    return res.score;
+}
+
+pub async fn db_challenge_solve(db_connection: &DbConnection, chall_name: String, username: String) -> bool {
+    let query = format!("UPDATE {table_name} SET solved_by = array_append(solved_by, $2) WHERE challenge_name=$1;", table_name=DB_CHALLENGE_TABLE);
+
+    let res= sqlx::query(&query[..])
+        .bind(chall_name.trim())
+        .bind(username.trim())
+        .execute(&db_connection.pool).await.expect("cannot update challenge");
+    
+    if res.rows_affected() > 0 {
+        return true;
+    }
+    return false;
+}
+
+pub async fn db_get_challenge_by_name(db_connection: &DbConnection, name: String) -> ChallengeData {
+    let query = format!("
+    SELECT 
+        id,
+        challenge_name,
+        score,
+        category,
+        solved_by,
+        running,
+        connection_string
+    FROM 
+        {table_name}
+    WHERE 
+        challenge_name=$1;",
+        table_name=DB_CHALLENGE_TABLE
+    );
+
+
+    let chall = sqlx::query_as(&query[..])
+        .bind(name)
+        .fetch_one(&db_connection.pool).await.unwrap_or(ChallengeData {
+            id: -1,
+            challenge_name: "none".to_string(),
+            score: 0,
+            category: "Nope".to_string(),
+            solved_by: vec![],
+            running: false,
+            connection_string: "".to_string()
+        });
+    
+    return chall;
+}
+
+pub async fn db_get_all_running_challenges(db_connection: &DbConnection) -> Vec<ChallengeData> {
+    let query = format!("
+    SELECT 
+        id,
+        challenge_name,
+        score,
+        category,
+        solved_by,
+        running,
+        connection_string
+    FROM 
+        {table_name}
+    WHERE 
+        running=true",
+        table_name=DB_CHALLENGE_TABLE
+    );
+
+
+    let challs = sqlx::query_as(&query[..])
+        .fetch_all(&db_connection.pool).await.unwrap_or(vec![]);
+    
+    return challs;
+}
+
+pub async fn db_set_challenge_running(db_connection: &DbConnection, name: String, is_running: bool) -> bool {
+    let query = format!("UPDATE {table_name} SET running = $2 WHERE challenge_name=$1;", table_name=DB_CHALLENGE_TABLE);
+    
+    let res= sqlx::query(&query[..])
+        .bind(name.trim())
+        .bind(is_running)
+        .execute(&db_connection.pool).await.expect("cannot update challenge");
+    
+    if res.rows_affected() > 0 {
+        return true;
+    }
+    return false;
+}
+
+pub async fn db_set_challenge_connection_string(db_connection: &DbConnection, name: String, connection_string: String) -> bool {
+    let query = format!("UPDATE {table_name} SET connection_string = $2 WHERE challenge_name=$1;", table_name=DB_CHALLENGE_TABLE);
+
+    let res= sqlx::query(&query[..])
+        .bind(name.trim())
+        .bind(connection_string)
+        .execute(&db_connection.pool).await.expect("cannot update challenge");
+    
+    if res.rows_affected() > 0 {
+        return true;
+    }
+    return false;
+}

@@ -1,7 +1,7 @@
 // use std::{sync::{mpsc::{self, Receiver, Sender}, Arc}, thread::spawn};
 use actix_web::{http::header::ContentType, web, HttpResponse, Result as ActixResult, cookie::Cookie, HttpRequest};
 use maud::{html, Markup};
-use jwt::{SignWithKey, VerifyWithKey, Error as JWT_Error};
+use jwt::{Error as JWT_Error, SignWithKey, Store, VerifyWithKey};
 use hmac::{Hmac, Mac};
 use crate::database::{solve_history::SolveHistoryEntry, user::UserInstance, DbFilter};
 use std::{collections::BTreeMap, os::unix::fs::MetadataExt, vec};
@@ -38,15 +38,13 @@ pub fn sign_jwt(user: UserInstance) -> String {
     let key: Hmac<Sha256> = Hmac::new_from_slice(SECRET_KEY.as_bytes()).unwrap();
     let mut claims = BTreeMap::new();
 
-    let id = user.id().to_string();
-    let is_admin = user.is_admin().to_string();
-    let challenge_solved = user.challenge_solved().to_string();
+    let id = user.id.to_string();
+    let is_admin = user.is_admin.to_string();
 
     claims.insert("id", id.as_str());
-    claims.insert("username", user.username());
-    claims.insert("email", user.email());
+    claims.insert("username", user.username.as_str());
+    claims.insert("email", user.email.as_str());
     claims.insert("is_admin", &is_admin);
-    claims.insert("challenge_solved", &challenge_solved);
 
     let token_str = claims.sign_with_key(&key).expect("jwt signing failed");
 
@@ -216,7 +214,7 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
     if claims.len() == 0 {
         return Ok(html!(
             script {
-                "location.href = '/';"
+                "location.href = '/login';"
             }
         ));
     }
@@ -225,7 +223,7 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
     if is_admin == false {
         return Ok(html!(
             script {
-                "location.href = '/';"
+                "location.href = '/login';"
             }
         ));
     }
@@ -305,23 +303,23 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                         }
                                         @for user in users {
                                             tr {
-                                                td { (user.id()) }
-                                                td { (user.username()) }
-                                                td { (user.email()) }
-                                                @if user.is_admin() {
+                                                td { (user.id) }
+                                                td { (user.username) }
+                                                td { (user.email) }
+                                                @if user.is_admin {
                                                     td { "admin" }
                                                 } @else {
                                                     td { "user" }
                                                 }
-                                                td { (user.challenge_solved()) }
-                                                td { (user.is_locked()) }
+                                                td { (user.challenge_solved.len()) }
+                                                td { (user.is_locked) }
                                                 td { 
                                                     div class="action-btn-wrapper" {
-                                                        button data-userid=(user.id()) class="del-btn" {
+                                                        button data-userid=(user.id) class="del-btn" {
                                                             "🗑️"
                                                         }
 
-                                                        button data-userid=(user.id()) class="ban-btn" {
+                                                        button data-userid=(user.id) class="ban-btn" {
                                                             "⛔"
                                                         }
                                                     }
@@ -405,9 +403,11 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                                 td { (chall.3) }
                                                 @if chall.4 {
                                                     td { "🟢" }
-                                                    div class="action-btn-wrapper" {
-                                                        button data-challengeId=(chall.0) class="stop-btn" {
-                                                            "Stop"
+                                                    td {
+                                                        div class="action-btn-wrapper" {
+                                                            button data-challengeId=(chall.0) id="stop-btn" {
+                                                                "Stop"
+                                                            }
                                                         }
                                                     }
                                                 } @else {
@@ -429,6 +429,22 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
 
 
 pub async fn challenges(page: web::Query<PaginationQuery>, db_conn: web::Data<DbConnection>, req: HttpRequest) -> ActixResult<Markup> {
+    let challs = db_conn.db_get_all_running_challenges().await;
+
+    let cookie: Cookie<'_> = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
+
+    let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
+
+    if claims.len() == 0 {
+        return Ok(html!(
+            script {
+                "location.href = '/login';"
+            }
+        ));
+    }
+
+    let username = claims.get("username").unwrap();
+
     Ok(html!(
         html {
             head {
@@ -444,65 +460,58 @@ pub async fn challenges(page: web::Query<PaginationQuery>, db_conn: web::Data<Db
                     h1 style="margin-bottom: 20px;"{ "Challenges" }
                     input id="flag-submit" placeholder="Submit your flag here..." {}
                     div class="wrapper" {
-                        div class="challenge-wrapper" {
-                            h3 { "Electronia" }
-                            div class="chall-metadata"{
-                                p class="chall-score" { "500" }
-                                p class="chall-category" { "Web" }
-                            }
-                        }
-    
-                        div class="challenge-wrapper challenge-solved" {
-                            h3 { "Easy V8" }
-                            div class="chall-metadata"{
-                                p class="chall-score" { "500" }
-                                p class="chall-category" { "Pwn" }
-                            }
-                        }
 
-                        div class="challenge-wrapper challenge-solved" {
-                            h3 { "1 bit flip" }
-                            div class="chall-metadata"{
-                                p class="chall-score" { "500" }
-                                p class="chall-category" { "Pwn" }
-                            }
-                        }
-
-                        div class="challenge-wrapper" {
-                            h3 { "Postviewer V3" }
-                            div class="chall-metadata"{
-                                p class="chall-score" { "500" }
-                                p class="chall-category" { "Web" }
-                            }
-                        }
-
-                        div class="challenge-wrapper" {
-                            h3 { "Pokemon" }
-                            div class="chall-metadata"{
-                                p class="chall-score" { "500" }
-                                p class="chall-category" { "Reverse Engineering" }
-                            }
-                        }
-
-                        div class="challenge-wrapper" {
-                            h3 { "RSA v1" }
-                            div class="chall-metadata"{
-                                p class="chall-score" { "500" }
-                                p class="chall-category" { "Crypto" }
-                            }
-                        }
-
-                        div class="challenge-wrapper" {
-                            h3 { "Registry" }
-                            div class="chall-metadata"{
-                                p class="chall-score" { "500" }
-                                p class="chall-category" { "Forensic" }
+                        @for chall in challs {
+                            div 
+                                data-connection=(chall.connection_string) 
+                                data-score=(chall.score) data-chall=(chall.challenge_name) 
+                                class=(
+                                    if chall.solved_by.contains(username) {
+                                        "challenge-wrapper challenge-solved"
+                                    } else {
+                                        "challenge-wrapper"
+                                    }
+                                ) {
+                                
+                                h3 { (chall.challenge_name) }
+                                div class="chall-metadata"{
+                                    p class="chall-score" { (chall.score) }
+                                    p class="chall-category" { (chall.category) }
+                                }
                             }
                         }
                     }
-                    
+                    div class="challenge-modal" {
+                        div class="modal-content" {
+                            div class="modal-top" {
+                                span class="modal-close" { "x" }
+                            }
+                            div class="modal-wrapper" {
+                                div class="modal-title" {
+                                    h2 id="modal-chall-title" { "Easy V8" }
+                                    p id="chall-category" { "Pwn" } 
+                                    p id="chall-score" { "500" } 
+                                }
+    
+                                div class="modal-main" {
+                                    p id="chall-desc" { "Good luck" }
+                                    
+                                    h4 id="attachment-label" { "Remote" }
+                                    div class="remotes" {
+                                        code id="remote-content" {"nc cosgang-livec.tf 4444"}
+                                    }
+
+                                    h4 id="attachment-label" { "Attachments" }
+                                    div class="attachments" {
+                                        a href="/attachments/aaaa.zip" id="attachment" { "V8.zip" }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
+            script src="/static/js/challenges.js" {}
         }
     ))
 }

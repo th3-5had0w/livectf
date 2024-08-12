@@ -1,7 +1,8 @@
-use std::{collections::HashMap, fs::File, io::Write, process::Command, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
+use std::{collections::HashMap, fmt::format, fs::File, io::Write, process::Command, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
 
 use rand::Rng;
 use uuid::Uuid;
+use tokio::runtime::Runtime;
 
 use crate::{database::DbConnection, notifier::{self, craft_type_notify_message, NotifierCommInfo}, Notifier};
 
@@ -109,9 +110,9 @@ fn cmd_schedule(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
                                                     .trim().replace("sha256:", "");
                 
                 ctx.challenges.push(Challenge {
-                    challenge_image: challenge_image,
+                    challenge_image,
                     challenge_filename: challenge_filename.to_string(),
-                    flag: flag,
+                    flag,
                     port: 0,
                 });
 
@@ -130,6 +131,7 @@ fn cmd_schedule(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
 
 fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
     let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename");
+    let rt = Runtime::new().expect("failed creating tokio runtime");
 
     let mut rng = rand::thread_rng();
     let mut port: u16 = rng.gen_range(0x1000..0xffff);
@@ -152,7 +154,12 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
         let cmd = String::from_str("flag_info").unwrap();
         let data = notifier::craft_type_notify_message(&target_module, &[cmd, challenge_filename.to_string(), challenge.flag]);
         ctx.sender.send((target_module, data)).expect("deployer cannot send");
+        
+        let conn_string = format!("nc localhost {}", challenge.port);
+        rt.block_on(ctx.db_conn.set_challenge_connection_string(challenge_filename.to_string(), conn_string));
+        rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), true));
 
+        println!("Deploy success {}", challenge_filename);
     } else {
 
         let target_module = String::from_str("timer").unwrap();
@@ -160,12 +167,13 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
         let data = notifier::craft_type_notify_message(&target_module, &[cmd, challenge_filename.to_string(), "fail".to_string()]);
         ctx.sender.send((target_module, data)).expect("deployer cannot send");
         ctx.challenges.retain(|challenge| &challenge.challenge_filename != challenge_filename);
-        println!("deploy failed");
+        println!("Deploy failed {}", challenge_filename);
     }
 }
 
 fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
     let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename");
+    let rt = Runtime::new().expect("failed creating tokio runtime");
     let destroy_success = destroy_challenge(challenge_filename); 
     if destroy_success {
         let target_module = String::from_str("flag_receiver").unwrap();
@@ -173,6 +181,7 @@ fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
         ctx.sender.send((target_module, data)).expect("deployer cannot send");
 
         ctx.challenges.retain(|challenge| &challenge.challenge_filename != challenge_filename);
+        rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), false));
     }
     else {
         println!("destroy failed");

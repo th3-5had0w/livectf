@@ -109,6 +109,7 @@ fn cmd_enqueue(_ctx: &mut TimerCtx, timer_queue_guard: Arc<Mutex<TimerQueue>>, d
 fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<(String, Vec<u8>)>) {
 
     loop {
+        sleep(time::Duration::from_secs(1));
         let mut timer_queue = timer_queue_guard.lock().expect("failed acquiring lock");
 
         let now_epoch = i128::try_from(
@@ -145,8 +146,6 @@ fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<(String, 
 
             }
         }
-
-        sleep(time::Duration::from_secs(1));
     }
 }
 

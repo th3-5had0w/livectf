@@ -12,12 +12,11 @@ pub struct UserInstance {
     pub username: String,
     pub password: String,
     pub email: String,
-    pub challenge_solved: i32,
+    pub challenge_solved: Vec<String>,
     pub bio: String,
     pub is_locked: bool,
     pub lock_due_at: i64,
     pub is_admin: bool,
-    pub score: i32
 }
 
 impl UserInstance {
@@ -32,72 +31,30 @@ impl UserInstance {
             username: username.to_string(),
             password: password.to_string(),
             email: email.to_string(),
-            challenge_solved: 0,
+            challenge_solved: vec![],
             bio: "write something...".to_string(),
             is_locked: false,
             lock_due_at: 0,
             is_admin,
-            score: 0
         }
     } 
-    pub fn id(&self) -> i32 {
-        self.id
-    }
-
-    pub fn username(&self) -> &str {
-        self.username.as_str()
-    } 
-
-    pub fn password(&self) -> &str {
-        self.password.as_str()
-    } 
-
-    pub fn bio(&self) -> &str {
-        self.bio.as_str()
-    }
-
-    pub fn challenge_solved(&self) -> i32 {
-        self.challenge_solved
-    }
-
-    pub fn is_locked(&self) -> bool {
-        self.is_locked
-    }
 
     #[allow(dead_code)]
     pub fn lock_due_at(&self) -> DateTime<Utc> {
         DateTime::from_timestamp(self.lock_due_at as i64, 0).unwrap_or(DateTime::from_timestamp(0, 0).unwrap())
     }
 
-    pub fn raw_lock_due_at(&self) -> i64 {
-        self.lock_due_at
-    }
-
-    pub fn is_admin(&self) -> bool {
-        self.is_admin
-    }
-
-    pub fn email(&self) -> &str {
-        self.email.as_str()
-    }
-    
-    pub fn score(&self) -> i32 {
-        self.score
-    }
-    
-
     pub fn deep_copy(&self) -> Self {
         UserInstance {
-            id: self.id(),
-            username: self.username().to_string(),
-            password: self.password().to_string(),
-            email: self.email().to_string(),
-            bio: self.bio().to_string(),
-            challenge_solved: self.challenge_solved(),
-            is_locked: self.is_locked(),
-            lock_due_at: self.raw_lock_due_at(),
-            is_admin: self.is_admin(),
-            score: self.score()
+            id: self.id,
+            username: self.username.to_string(),
+            password: self.password.to_string(),
+            email: self.email.to_string(),
+            bio: self.bio.to_string(),
+            challenge_solved: self.challenge_solved.to_vec(),
+            is_locked: self.is_locked,
+            lock_due_at: self.lock_due_at,
+            is_admin: self.is_admin,
         }
     }
 
@@ -117,12 +74,11 @@ impl UserInstance {
             username: "dead guy".to_string(),
             password: "dead guy".to_string(),
             email: "dead guy".to_string(),
-            challenge_solved: 0,
+            challenge_solved: vec![],
             bio: "no account matched that username".to_string(),
             is_locked: false,
             lock_due_at: 0,
             is_admin: false,
-            score: 0
         }
     }
 
@@ -157,18 +113,18 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
             match name {
                 "id" => {
                     filter_statement.push_str(
-                        (format!("id{}", op) + format!("{}", &filter.filter_instance().id()).as_str()).as_str()
+                        (format!("id{}", op) + format!("{}", &filter.filter_instance().id).as_str()).as_str()
                     )
                 },
                 "username" => { 
-                    let username = &filter.filter_instance().username();
+                    let username = &filter.filter_instance().username;
 
                     filter_statement.push_str(
                         format!("username LIKE '{}'", username.replace("\'", "\\'")).as_str()
                     )
                 },
                 "bio" => {
-                    let bio = &filter.filter_instance().bio();
+                    let bio = &filter.filter_instance().bio;
 
                     filter_statement.push_str(
                         format!("bio LIKE '{}'", bio.replace("\'", "\\'")).as_str()
@@ -176,19 +132,14 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
                 },
                 "is_locked" => {
                     filter_statement.push_str(
-                        format!("is_locked={}", &filter.filter_instance().is_locked()).as_str()
+                        format!("is_locked={}", &filter.filter_instance().is_locked).as_str()
                     )
                 },
                 "is_admin" => {
                     filter_statement.push_str(
-                        format!("is_admin={}", &filter.filter_instance().is_admin()).as_str()
+                        format!("is_admin={}", &filter.filter_instance().is_admin).as_str()
                     )
                 },
-                "score" => {
-                    filter_statement.push_str(
-                        (format!("score{}", op) + format!("{}", &filter.filter_instance().score()).as_str()).as_str()
-                    )
-                }
                 _ => ()
             } 
 
@@ -209,8 +160,7 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
         bio,
         is_locked,
         lock_due_at,
-        is_admin,
-        score
+        is_admin
     FROM 
         {table_name}
     {filter_statement}
@@ -243,8 +193,7 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
             bio,
             is_locked,
             lock_due_at,
-            is_admin,
-            score
+            is_admin
         )
     =
         (
@@ -257,18 +206,18 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
             $7,
             $8
         )
-    WHERE id = $8
+    WHERE id = $9
     ", table_name=DB_USER_TABLE);
     let result: PgQueryResult = sqlx::query(&query[..])
-        .bind(user.username())
-        .bind(bcrypt_hash(user.password(), 6).unwrap())
-        .bind(user.email())
-        .bind(user.challenge_solved())
-        .bind(user.bio())
-        .bind(user.is_locked())
-        .bind(user.raw_lock_due_at())
-        .bind(user.is_admin())
-        .bind(user.score())
+        .bind(user.username)
+        .bind(bcrypt_hash(user.password, 6).unwrap())
+        .bind(user.email)
+        .bind(user.challenge_solved)
+        .bind(user.bio)
+        .bind(user.is_locked)
+        .bind(user.lock_due_at)
+        .bind(user.is_admin)
+        .bind(user.id)
         .execute(&db_connection.pool).await.unwrap();
 
     if result.rows_affected() > 0 {
@@ -300,8 +249,7 @@ pub async fn db_user_login(db_connection: &DbConnection, username: &str, passwor
         bio,
         is_locked,
         lock_due_at,
-        is_admin,
-        score
+        is_admin
     FROM 
         {table_name}
     WHERE 
@@ -335,8 +283,7 @@ pub async fn db_user_register(db_connection: &DbConnection, user: UserInstance) 
         bio,
         is_locked,
         lock_due_at,
-        is_admin,
-        score
+        is_admin
     )
     VALUES
         (
@@ -347,18 +294,17 @@ pub async fn db_user_register(db_connection: &DbConnection, user: UserInstance) 
             $5,
             $6,
             $7,
-            $8,
-            0
+            $8
         );", table_name=DB_USER_TABLE);
         let result: PgQueryResult = sqlx::query(&query[..])
-        .bind(user.username().trim())
-        .bind(bcrypt_hash(user.password(), 6).unwrap())
-        .bind(user.email().trim())
-        .bind(user.challenge_solved())
-        .bind(user.bio())
-        .bind(user.is_locked())
-        .bind(user.raw_lock_due_at())
-        .bind(user.is_admin())
+        .bind(user.username.trim())
+        .bind(bcrypt_hash(user.password, 6).unwrap())
+        .bind(user.email.trim())
+        .bind(user.challenge_solved)
+        .bind(user.bio)
+        .bind(user.is_locked)
+        .bind(user.lock_due_at)
+        .bind(user.is_admin)
         .execute(&db_connection.pool).await?;
 
     if result.rows_affected() > 0 {
@@ -394,8 +340,7 @@ pub async fn db_get_user_by_id(db_connection: &DbConnection, user_id: i32) -> Re
         bio,
         is_locked,
         lock_due_at,
-        is_admin,
-        score
+        is_admin
     FROM 
         {table_name}
     WHERE 
@@ -409,4 +354,58 @@ pub async fn db_get_user_by_id(db_connection: &DbConnection, user_id: i32) -> Re
         .fetch_one(&db_connection.pool).await.unwrap_or(UserInstance::get_dead_guy_user());
     
     return Ok(user);
+}
+
+pub async fn db_get_user_by_name(db_connection: &DbConnection, name: String) -> Result<UserInstance, sqlx::Error> {
+    let query = format!("
+    SELECT 
+        id,
+        username,
+        password,
+        email,
+        challenge_solved,
+        bio,
+        is_locked,
+        lock_due_at,
+        is_admin
+    FROM 
+        {table_name}
+    WHERE 
+        username=$1;",
+        table_name=DB_USER_TABLE
+    );
+
+
+    let user = sqlx::query_as(&query[..])
+        .bind(name)
+        .fetch_one(&db_connection.pool).await.unwrap_or(UserInstance::get_dead_guy_user());
+    
+    return Ok(user);
+}
+
+pub async fn db_get_all_user_solved_challenge(db_connection: &DbConnection, challenge_name: String) -> Vec<UserInstance> {
+    let query = format!("
+    SELECT 
+        id,
+        username,
+        password,
+        email,
+        challenge_solved,
+        bio,
+        is_locked,
+        lock_due_at,
+        is_admin
+    FROM 
+        {table_name}
+    WHERE 
+        $1 = ANY (challenge_solved);",
+        table_name=DB_USER_TABLE
+    );
+
+
+    let users = sqlx::query_as(&query[..])
+        .bind(challenge_name)
+        .fetch_all(&db_connection.pool).await.unwrap_or(vec![]);
+    
+    return users;
 }
