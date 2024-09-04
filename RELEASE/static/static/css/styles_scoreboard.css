@@ -1,0 +1,53 @@
+.wrapper {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 50px;
+    height: 100%;
+    flex-wrap: wrap;
+}
+
+.scoreboard {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+td, th {
+    padding: 5px 200px
+}
+
+td {
+    border-left: 1px solid black;
+    border-right: 1px solid black;
+    border-bottom: 1px solid black;
+}
+
+.is-self {
+    background-color: #EBF4F6;
+}
+
+.page-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.page-nav div {
+    display: flex;
+    flex-direction: column;
+}
+
+a:visited {
+    color: black;
+}
+
+a {
+    text-decoration: none;
+}
+
+.page-nav a {
+    font-size: 30px;
+}

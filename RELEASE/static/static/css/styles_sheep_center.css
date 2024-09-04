@@ -1,0 +1,141 @@
+.container {
+    height: 90%
+}
+
+.wrapper {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    padding: 50px;
+    height: 100%;
+    justify-content: space-between;
+}
+
+.menu-wrapper {
+    padding: 10px;
+    border-radius: 10px;
+    display: flex;
+    width: 20%;    
+    flex-direction: column;
+    background-color: #071952;
+    color: #EBF4F6;
+    height: 100%;
+    outline: 5px solid #088395;
+    display: flex;
+    flex-direction: column;
+}
+
+.menu-wrapper a {
+    color: #EBF4F6;
+    text-decoration: none !important;
+    margin-left: 20px;
+}
+
+.main-section {
+    padding: 10px;
+    border-radius: 10px;
+    display: flex;
+    width: 75%;    
+    height: 100%;
+    flex-direction: column;
+    outline: 5px solid #088395
+}
+
+#section-title {
+    margin-bottom: 30px;
+}
+
+.section-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.the-table {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: scroll;
+    height: 400px;
+}
+
+.the-table tbody {
+    width: 100%;
+}
+
+th, td {
+    padding: 5px 20px;
+}
+
+a:hover {
+    color: #37B7C3;
+}
+
+.action-btn-wrapper {
+    display: flex;
+    justify-content: space-between;
+}
+
+
+.del-btn, .ban-btn {
+    background: none;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.success-submission {
+    color: #33691E;
+    font-weight: bold;
+}
+
+.fail-submission {
+    color: #c30010;
+    font-weight: bold;
+}
+
+#upload-challenge {
+    padding: 5px 10px;
+}
+
+.form-wrapper {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.challenge-upload-form, .challenge-schedule-form {
+    display: flex;
+    flex-direction: column;
+    width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.challenge-submenu {
+    margin-left: 30px;
+    display: flex;
+    flex-direction: column;
+}
+
+.challenge-upload-form input, .challenge-schedule-form input, .challenge-schedule-form select {
+    padding: 5px 20px;
+    margin: 3px;
+    width: 100%;
+}
+
+#upload-challenge, #schedule-challenge {
+    outline: none;
+    background: none;
+    width: 90px;
+    height: 90px;
+    transform: rotate(45deg);
+    margin-top: 40px;
+    cursor: pointer;
+}
+
+#upload-challenge span, #schedule-challenge span {
+    display: inline-block;
+    transform: rotate(-45deg) !important;
+}
