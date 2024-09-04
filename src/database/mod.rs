@@ -95,11 +95,11 @@ impl DbConnection {
         user.censor_password(password_censor)
     }
 
-    // pub async fn get_user_by_id(&self, user_id: i32, password_censor: bool) -> user::UserInstance {
-    //     let found_user: user::UserInstance = user::db_get_user_by_id(&self, user_id).await.unwrap();
+    pub async fn get_user_by_id(&self, user_id: i32, password_censor: bool) -> user::UserInstance {
+        let found_user: user::UserInstance = user::db_get_user_by_id(&self, user_id).await.unwrap();
 
-    //     found_user.censor_password(password_censor)
-    // }
+        found_user.censor_password(password_censor)
+    }
 
     pub async fn filter_user(&self, filter: DbFilter<user::UserInstance>) -> Vec<user::UserInstance> {
         let users: Vec<user::UserInstance> = user::db_filter_for_user(&self, filter, 1).await.unwrap_or(

@@ -107,5 +107,35 @@ a:hover {
 .challenge-upload-form, .challenge-schedule-form {
     display: flex;
     flex-direction: column;
-    width: 200px;
+    width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.challenge-submenu {
+    margin-left: 30px;
+    display: flex;
+    flex-direction: column;
+}
+
+.challenge-upload-form input, .challenge-schedule-form input, .challenge-schedule-form select {
+    padding: 5px 20px;
+    margin: 3px;
+    width: 100%;
+}
+
+#upload-challenge, #schedule-challenge {
+    outline: none;
+    background: none;
+    width: 90px;
+    height: 90px;
+    transform: rotate(45deg);
+    margin-top: 40px;
+    cursor: pointer;
+}
+
+#upload-challenge span, #schedule-challenge span {
+    display: inline-block;
+    transform: rotate(-45deg) !important;
 }

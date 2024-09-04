@@ -19,6 +19,8 @@ pub mod challenge;
 const USER_PATH: &str = "users";
 const SOLVE_LOG_PATH: &str = "solve-logs";
 const CHALLENGE_PATH: &str = "challenges";
+const CHALLENGE_UPLOAD_PATH: &str = "challenge-upload";
+const CHALLENGE_SCHEDULE_PATH: &str = "challenge-schedule";
 
 #[derive(serde::Serialize)]
 pub struct JsonResponse {
@@ -114,10 +116,15 @@ pub async fn login() -> ActixResult<Markup> {
                     img src="/static/img/cosgang.jpg" id="cosgang-avt" {}
                     div class="form-login-container" {
                         h1 { "Login" }
-                        form action="/api/login" method="POST" {
+                        form style="margin-top: 20px" action="/api/login" method="POST" {
                             input name="username" type="text" placeholder="Username..." {}
                             input name="password" type="password" placeholder="Password..." {}
                             input name="login" type="submit" value="Login" {}
+                        }
+                    }
+                    p style="margin-top: 60px" { "No account? "
+                        a href="/register"{
+                            "register"
                         }
                     }
                 }
@@ -143,11 +150,16 @@ pub async fn register() -> ActixResult<Markup> {
                     img src="/static/img/cosgang.jpg" id="cosgang-avt" {}
                     div class="form-reg-container" {
                         h1 { "Register" }
-                        form action="/api/register" method="POST" {
+                        form style="margin-top: 20px" action="/api/register" method="POST" {
                             input name="email" type="text" placeholder="Email..." {}
                             input name="username" type="text" placeholder="Username..." {}
                             input name="password" type="password" placeholder="Password..." {}
                             input name="register" type="submit" value="Register" {}
+                        }
+                    }
+                    p style="margin-top: 100px" { "Already have account? "
+                        a href="/login"{
+                            "login"
                         }
                     }
                 }
@@ -287,6 +299,12 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                         div class="menu-wrapper" {
                             a href=(format!("/sheep_center?path={}", USER_PATH)) { "Users management" }
                             a href="/sheep_center?path=challenges" { "Challenges" }
+                            @if vec!(CHALLENGE_PATH, CHALLENGE_SCHEDULE_PATH, CHALLENGE_UPLOAD_PATH).contains(&path.as_str()) {
+                                div class="challenge-submenu" {
+                                    a href=("/sheep_center?path=".to_string()+CHALLENGE_UPLOAD_PATH) { "Upload" }
+                                    a href=("/sheep_center?path=".to_string()+CHALLENGE_SCHEDULE_PATH) { "Schedule" }
+                                }
+                            } 
                             a href=(format!("/sheep_center?path={}", SOLVE_LOG_PATH)) { "Solve logs" }
                         }
     
@@ -364,30 +382,6 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                 }
                             } @else if path == CHALLENGE_PATH {
                                 h1 id="section-title" { "Challenges" }
-                                div class="form-wrapper" {
-                                    form class="challenge-upload-form" method="post" enctype="multipart/form-data" {
-                                        input type="date" name="start-date" id="start-date" {}
-                                        input type="time" name="start-time" id="start-time" {}
-                                        input type="date" name="end-date" id="end-date" {}
-                                        input type="time" name="end-time" id="end-time" {}
-                                        input type="file" name="challenge-file" id="fileToUpload" accept=".tar.gz" {}
-                                        button id="upload-challenge" { "upload" }
-                                    }
-    
-                                    form class="challenge-schedule-form" method="post" {
-                                        select name="challenge-name" id="challenge-name" {
-                                            @for chall in challenges.clone() {
-                                                option value=(chall.0) { (chall.0) }
-                                            }
-                                        }
-                                        input type="date" name="start-date2" id="start-date2" {}
-                                        input type="time" name="start-time" id="start-time2" {}
-                                        input type="date" name="end-date2" id="end-date2" {}
-                                        input type="time" name="end-time2" id="end-time2" {}
-                                        button id="schedule-challenge" { "schedule" }
-                                    }
-                                }
-
                                 div class="section-wrapper" {
                                     table class="the-table" {
                                         tr {
@@ -420,6 +414,46 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                         }
                                     }
                                 }
+                            } @else if path == CHALLENGE_UPLOAD_PATH {
+                                h1 id="section-title" { "Challenge upload" }
+                                div class="section-wrapper" {
+                                    div class="form-wrapper" { 
+                                        form class="challenge-upload-form" method="post" enctype="multipart/form-data" {
+                                            input type="date" name="start-date" id="start-date" {}
+                                            input type="time" name="start-time" id="start-time" {}
+                                            input type="date" name="end-date" id="end-date" {}
+                                            input type="time" name="end-time" id="end-time" {}
+                                            input type="file" name="challenge-file" id="fileToUpload" accept=".tar.gz" {}
+                                            button id="upload-challenge" { 
+                                                span {
+                                                    "upload" 
+                                                } 
+                                            }
+                                        }
+                                    }
+                                }
+                            } @else if path == CHALLENGE_SCHEDULE_PATH {
+                                h1 id="section-title" { "Challenge schedule" }
+                                div class="section-wrapper" {
+                                    div class="form-wrapper" {
+                                        form class="challenge-schedule-form" method="post" {
+                                            select name="challenge-name" id="challenge-name" {
+                                                @for chall in challenges.clone() {
+                                                    option value=(chall.0) { (chall.0) }
+                                                }
+                                            }
+                                            input type="date" name="start-date2" id="start-date2" {}
+                                            input type="time" name="start-time" id="start-time2" {}
+                                            input type="date" name="end-date2" id="end-date2" {}
+                                            input type="time" name="end-time2" id="end-time2" {}
+                                            button id="schedule-challenge" { 
+                                                span {
+                                                    "schedule" 
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -447,6 +481,11 @@ pub async fn challenges(db_conn: web::Data<DbConnection>, req: HttpRequest) -> A
     }
 
     let username = claims.get("username").unwrap();
+    let user_id = claims.get("id").unwrap().parse::<i32>().unwrap_or(-1);
+
+    if user_id == -1 {
+        return Ok(html!());
+    }
 
     Ok(html!(
         html {
@@ -460,6 +499,13 @@ pub async fn challenges(db_conn: web::Data<DbConnection>, req: HttpRequest) -> A
             }
             body {
                 div class="container" {
+                    nav class="page-nav" {
+                        a href="/scoreboard" { "Scoreboard" }
+                        div { 
+                            p { "Hello, "(username) }
+                            p {"Point: "(utils::get_user_score(db_conn.do_clone(), user_id).await)}
+                        }
+                    }
                     h1 style="margin-bottom: 20px;"{ "Challenges" }
                     input id="flag-submit" placeholder="Submit your flag here..." {}
                     div class="wrapper" {
@@ -533,9 +579,10 @@ pub async fn scoreboard(db_conn: web::Data<DbConnection>, req: HttpRequest) -> A
     }
 
     let username = claims.get("username").unwrap();
+    let user_id = claims.get("id").unwrap().parse::<i32>().unwrap_or(-1);
     let users = db_conn.get_all_user().await;
     let scoreboard_users = utils::get_scoreboard_from_user_vec(db_conn.do_clone(), users).await;
-
+    
     Ok(html!(
         html {
             head {
@@ -548,6 +595,13 @@ pub async fn scoreboard(db_conn: web::Data<DbConnection>, req: HttpRequest) -> A
             }
             body {
                 div class="container" {
+                    nav class="page-nav" {
+                        a href="/challenges" { "Challenges" }
+                        div { 
+                            p { "Hello, "(username) }
+                            p {"Point: "(utils::get_user_score(db_conn.do_clone(), user_id).await)}
+                        }
+                    }
                     h1 style="margin-bottom: 20px;" { "Scoreboard" }
                     div class="wrapper" {
                         table class="scoreboard" {

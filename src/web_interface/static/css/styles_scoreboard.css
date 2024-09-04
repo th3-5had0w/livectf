@@ -27,3 +27,27 @@ td {
 .is-self {
     background-color: #EBF4F6;
 }
+
+.page-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.page-nav div {
+    display: flex;
+    flex-direction: column;
+}
+
+a:visited {
+    color: black;
+}
+
+a {
+    text-decoration: none;
+}
+
+.page-nav a {
+    font-size: 30px;
+}

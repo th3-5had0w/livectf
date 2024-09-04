@@ -2,6 +2,8 @@ use std::{process::Command, fs};
 use std::time::{SystemTime, UNIX_EPOCH};
 use core::cmp::Ordering;
 
+use sqlx::database;
+
 use crate::database::user::UserInstance;
 use crate::database::DbConnection;
 
@@ -124,4 +126,19 @@ pub async fn get_scoreboard_from_user_vec(db_conn: DbConnection, users: Vec<User
     }
 
     final_scoreboard_users.to_vec()
+}
+
+pub async fn get_user_score(db_conn: DbConnection, user_id: i32) -> u64 {
+
+    let user: UserInstance = db_conn.get_user_by_id(user_id, true).await;
+
+    let mut total_score: u64 = 0;
+    for chall_name in user.challenge_solved {
+        let chall = db_conn.get_challenge_by_name(chall_name).await;
+        if chall.running {
+            total_score += u64::try_from(chall.score).unwrap();
+        }
+    }
+
+    return total_score;
 }

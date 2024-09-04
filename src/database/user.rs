@@ -154,22 +154,7 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
         }
     }
     
-    let mut query = format!("
-    SELECT 
-        id,
-        username,
-        password,
-        email,
-        challenge_solved,
-        bio,
-        is_locked,
-        lock_due_at,
-        is_admin,
-        last_submission
-    FROM 
-        {table_name}
-    {filter_statement}
-    ", table_name=DB_USER_TABLE, filter_statement=filter_statement);
+    let mut query = format!("SELECT * FROM {table_name} {filter_statement}", table_name=DB_USER_TABLE, filter_statement=filter_statement);
 
     if limit != -1 {
         query.push_str("LIMIT $1");
@@ -247,24 +232,7 @@ pub async fn db_delete_user(db_connection: &DbConnection, user_id: i32) -> Resul
 }
 
 pub async fn db_user_login(db_connection: &DbConnection, username: &str, password: &str) -> Result<UserInstance, sqlx::Error> {
-    let query = format!("
-    SELECT 
-        id,
-        username,
-        password,
-        email,
-        challenge_solved,
-        bio,
-        is_locked,
-        lock_due_at,
-        is_admin,
-        last_submission
-    FROM 
-        {table_name}
-    WHERE 
-        username=$1;",
-        table_name=DB_USER_TABLE
-    );
+    let query = format!("SELECT * FROM {table_name} WHERE username=$1;", table_name=DB_USER_TABLE);
 
 
     let user = sqlx::query_as(&query[..])
@@ -341,52 +309,19 @@ pub async fn db_get_all_user(db_connection: &DbConnection) -> Vec<UserInstance> 
     return result;
 }
 
-// pub async fn db_get_user_by_id(db_connection: &DbConnection, user_id: i32) -> Result<UserInstance, sqlx::Error> {
-//     let query = format!("
-//     SELECT 
-//         id,
-//         username,
-//         password,
-//         email,
-//         challenge_solved,
-//         bio,
-//         is_locked,
-//         lock_due_at,
-//         is_admin
-//     FROM 
-//         {table_name}
-//     WHERE 
-//         id=$1;",
-//         table_name=DB_USER_TABLE
-//     );
+pub async fn db_get_user_by_id(db_connection: &DbConnection, user_id: i32) -> Result<UserInstance, sqlx::Error> {
+    let query = format!("SELECT * FROM {table_name} WHERE id=$1;", table_name=DB_USER_TABLE);
 
-
-//     let user = sqlx::query_as(&query[..])
-//         .bind(user_id)
-//         .fetch_one(&db_connection.pool).await.unwrap_or(UserInstance::get_dead_guy_user());
+    let user = sqlx::query_as(&query[..])
+        .bind(user_id)
+        .fetch_one(&db_connection.pool).await.unwrap_or(UserInstance::get_dead_guy_user());
     
-//     return Ok(user);
-// }
+    return Ok(user);
+}
 
 pub async fn db_get_user_by_name(db_connection: &DbConnection, name: String) -> Result<UserInstance, sqlx::Error> {
     let query = format!("
-    SELECT 
-        id,
-        username,
-        password,
-        email,
-        challenge_solved,
-        bio,
-        is_locked,
-        lock_due_at,
-        is_admin,
-        last_submission
-    FROM 
-        {table_name}
-    WHERE 
-        username=$1;",
-        table_name=DB_USER_TABLE
-    );
+    SELECT * FROM {table_name} WHERE username=$1;", table_name=DB_USER_TABLE);
 
 
     let user = sqlx::query_as(&query[..])

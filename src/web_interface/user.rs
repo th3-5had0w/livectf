@@ -55,7 +55,7 @@ pub async fn api_user_register(db_conn: web::Data<DbConnection>, form: web::Form
     if form.username.len() == 0 || form.password.len() == 0 || form.email.len() == 0 {
         return Ok(get_error("Missing username/password"));
     } 
-    let re = Regex::new(r"^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]+$").unwrap();
+    let re = Regex::new(r"^[a-zA-Z0-9]+@[a-zA-Z0-9\.]+$").unwrap();
     let matches = re.captures(form.email.as_str());
 
     if matches.is_none() {
@@ -93,7 +93,7 @@ pub async fn api_user_create(db_conn: web::Data<DbConnection>, req: HttpRequest,
         return Ok(unauthorized("You are not admin"));
     }
 
-    let re = Regex::new(r"^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]+$").unwrap();
+    let re = Regex::new(r"^[a-zA-Z0-9]+@[a-zA-Z0-9\.]+$").unwrap();
     let matches = re.captures(form.email.as_str());
 
     if matches.is_none() {
@@ -125,7 +125,7 @@ pub async fn api_user_edit(db_conn: web::Data<DbConnection>, req: HttpRequest, f
         return Ok(forbiden("You can't edit this user"));
     }
 
-    let re = Regex::new(r"^[a-zA-Z0-9]+@[a-zA-Z0-9]+\.[a-zA-Z]+$").unwrap();
+    let re = Regex::new(r"^[a-zA-Z0-9]+@[a-zA-Z0-9\.]+$").unwrap();
     let matches = re.captures(form.email.as_str());
 
     if matches.is_none() {
