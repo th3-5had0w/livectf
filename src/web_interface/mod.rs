@@ -48,7 +48,8 @@ pub fn sign_jwt(user: UserInstance) -> String {
     claims.insert("email", user.email.as_str());
     claims.insert("is_admin", &is_admin);
 
-    let token_str = claims.sign_with_key(&key).expect("jwt signing failed");
+    let jwt_failed = String::from("");
+    let token_str = claims.sign_with_key(&key).unwrap_or(jwt_failed);
 
     return token_str;
 }
@@ -234,8 +235,8 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
         ));
     }
 
-    let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap();
-    if is_admin == false {
+    let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap_or(false);
+    if !is_admin {
         return Ok(html!(
             script {
                 "location.href = '/login';"
@@ -255,16 +256,6 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
             if metadata.is_dir() {
                 let challenge_name = String::from_utf8(dir_entry.file_name().as_encoded_bytes().to_vec()).unwrap();
                 let creation_time = DateTime::from_timestamp(metadata.ctime(), 0).unwrap();
-                let filter = DbFilter::filter_with(SolveHistoryEntry::new(
-                    String::from("test"),
-                    challenge_name.clone(),
-                    true,
-                    String::from("test")
-                ), vec![
-                    (String::from("challenge_name"), String::from("=")),
-                    (String::from("is_success"), String::from("="))
-                ]);
-               
                 let solve_count = db_conn.get_challenge_by_name(challenge_name.to_string()).await.solved_by.len();
 
                 let filter = DbFilter::filter_with(SolveHistoryEntry::new(
@@ -480,10 +471,11 @@ pub async fn challenges(db_conn: web::Data<DbConnection>, req: HttpRequest) -> A
         ));
     }
 
-    let username = claims.get("username").unwrap();
+    let no_username = String::from("");
+    let username = claims.get("username").unwrap_or(&no_username);
     let user_id = claims.get("id").unwrap().parse::<i32>().unwrap_or(-1);
 
-    if user_id == -1 {
+    if user_id == -1 || username.len() == 0 {
         return Ok(html!());
     }
 

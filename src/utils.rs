@@ -2,8 +2,6 @@ use std::{process::Command, fs};
 use std::time::{SystemTime, UNIX_EPOCH};
 use core::cmp::Ordering;
 
-use sqlx::database;
-
 use crate::database::user::UserInstance;
 use crate::database::DbConnection;
 

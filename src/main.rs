@@ -31,7 +31,7 @@ async fn main() -> std::io::Result<()> {
     challenge_upload_handler::init(&mut notifier, slave_sender.clone(), db_conn.clone());
     deployer::init(&mut notifier, slave_sender.clone(), db_conn.clone());
     flag_receiver::init(&mut notifier, slave_sender.clone(), db_conn.clone());
-    timer::init(&mut notifier, slave_sender.clone(), db_conn.clone());
+    timer::init(&mut notifier, slave_sender.clone());
     // database::init(&mut notifier, slave_sender.clone());
 
     slaves = notifier.slaves.clone();

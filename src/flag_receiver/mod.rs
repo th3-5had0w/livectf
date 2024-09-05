@@ -67,11 +67,13 @@ pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path
     let cookie = req.cookie("auth").unwrap_or(Cookie::build("auth", "").finish());
 
     let claims: BTreeMap<String, String> = get_jwt_claims(cookie.value()).unwrap_or(BTreeMap::new());
-    let username = claims.get("username").expect("Missing username in JWT");
+    let no_username = "".to_string();
+    let username = claims.get("username").unwrap_or(&no_username);
 
-    if claims.len() == 0 {
+    if claims.len() == 0 || username.len() == 0 {
         return Ok(forbiden("Not authenticated"));
     }
+
     let submitted_flag = &path.0;
     
     let target_module = String::from_str("flag_receiver").unwrap();

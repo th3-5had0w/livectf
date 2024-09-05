@@ -23,11 +23,6 @@ pub struct ChallengeData {
     pub connection_string: String
 }
 
-#[derive(FromRow)]
-struct ScoreStruct {
-    score: i32
-}
-
 pub async fn db_store_challenge_metadata(db_connection: &DbConnection, challenge: ChallengeData) -> bool {
     let no_one_solved: Vec<String> = vec![];
     let query = format!("
@@ -55,7 +50,7 @@ pub async fn db_store_challenge_metadata(db_connection: &DbConnection, challenge
         .bind(no_one_solved)
         .bind(false)
         .bind(challenge.connection_string)
-        .execute(&db_connection.pool).await.expect("Error storing challenge metadata");
+        .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
 
     if result.rows_affected() > 0 {
         return true;
@@ -63,24 +58,13 @@ pub async fn db_store_challenge_metadata(db_connection: &DbConnection, challenge
     return false;
 } 
 
-pub async fn db_get_challenge_score(db_connection: &DbConnection, name: String) -> i32 {
-    let query = format!("SELECT score FROM {table_name} WHERE challenge_name=$1;", table_name=DB_CHALLENGE_TABLE);
-
-
-    let res: ScoreStruct = sqlx::query_as(&query[..])
-        .bind(name.trim())
-        .fetch_one(&db_connection.pool).await.unwrap_or(ScoreStruct { score: 0});
-    
-    return res.score;
-}
-
 pub async fn db_challenge_solve(db_connection: &DbConnection, chall_name: String, username: String) -> bool {
     let query = format!("UPDATE {table_name} SET solved_by = array_append(solved_by, $2) WHERE challenge_name=$1;", table_name=DB_CHALLENGE_TABLE);
 
     let res= sqlx::query(&query[..])
         .bind(chall_name.trim())
         .bind(username.trim())
-        .execute(&db_connection.pool).await.expect("cannot update challenge");
+        .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
     
     if res.rows_affected() == 0 {
         return false;
@@ -134,7 +118,7 @@ pub async fn db_set_challenge_running(db_connection: &DbConnection, name: String
     let res= sqlx::query(&query[..])
         .bind(name.trim())
         .bind(is_running)
-        .execute(&db_connection.pool).await.expect("cannot update challenge");
+        .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
     
     if res.rows_affected() > 0 {
         return true;
@@ -148,7 +132,7 @@ pub async fn db_set_challenge_connection_string(db_connection: &DbConnection, na
     let res= sqlx::query(&query[..])
         .bind(name.trim())
         .bind(connection_string)
-        .execute(&db_connection.pool).await.expect("cannot update challenge");
+        .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
     
     if res.rows_affected() > 0 {
         return true;
@@ -162,7 +146,7 @@ pub async fn db_update_challenge_score(db_connection: &DbConnection, name: Strin
     let res= sqlx::query(&query[..])
         .bind(name.trim())
         .bind(score)
-        .execute(&db_connection.pool).await.expect("cannot update challenge");
+        .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
     
     if res.rows_affected() > 0 {
         return true;

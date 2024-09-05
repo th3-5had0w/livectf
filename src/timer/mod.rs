@@ -3,7 +3,7 @@ use std::{collections::{BinaryHeap, HashMap}, sync::{mpsc::{self, Receiver, Send
 
 // use uuid::Uuid;
 
-use crate::{database::DbConnection, notifier::{craft_type_notify_message, Notifier, NotifierCommInfo}};
+use crate::notifier::{craft_type_notify_message, Notifier, NotifierCommInfo};
 
 #[derive(PartialEq, Eq)]
 struct ScheduledChallenge(String, i128);
@@ -44,16 +44,14 @@ struct TimerCtx {
     // main comm channel
     sender: Sender<(String, Vec<u8>)>,
     listener: Receiver<Vec<u8>>,
-    db_conn: DbConnection
 }
 
-pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>, db_conn: DbConnection) {
+pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>) {
     let (notifier_sender, my_receiver) : (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
     
     let ctx = TimerCtx {
         sender: my_sender,
         listener: my_receiver,
-        db_conn
     };
 
     let comm_info = NotifierCommInfo {
@@ -149,7 +147,7 @@ fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<(String, 
     }
 }
 
-fn cmd_deploy_info(ctx: &mut TimerCtx, timer_queue_guard: Arc<Mutex<TimerQueue>>, data: &HashMap<&str, String>) {
+fn cmd_deploy_info(_ctx: &mut TimerCtx, timer_queue_guard: Arc<Mutex<TimerQueue>>, data: &HashMap<&str, String>) {
     let mut timer_queue = timer_queue_guard.lock().expect("failed acquiring lock");
     let challenge_name = data.get("challenge_name").expect("missing challenge_name");
     let deploy_status = data.get("deploy_status").expect("missing deploy_status");

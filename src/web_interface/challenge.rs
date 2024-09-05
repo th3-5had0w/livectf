@@ -14,8 +14,8 @@ pub async fn api_challenge_action(slaves: web::Data<NotifierComms>, req: HttpReq
         return Ok(forbiden("Not authenticated"));
     }
 
-    let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap();
-    if is_admin == false {
+    let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap_or(false);
+    if !is_admin {
         return Ok(unauthorized("You are not admin"));
     }
 

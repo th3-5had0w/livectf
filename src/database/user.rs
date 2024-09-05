@@ -1,10 +1,18 @@
-use sqlx::{FromRow, Decode};
+use sqlx::{Decode, FromRow};
 use sqlx::postgres::PgQueryResult;
 use chrono::{DateTime, offset::Utc};
 use bcrypt::{verify as bcrypt_verify, hash as bcrypt_hash};
 use serde;
     
 use crate::database::{DbConnection, DbFilter, DB_USER_TABLE};
+
+use super::{DB_CHALLENGE_TABLE, DB_SOLVE_HISTORY_TABLE};
+
+const MINIMUM_SCORE: i32 = 50;
+const INITIAL_SCORE: i32 = 500;
+// lower this makes score decay faster
+const DECAY_VALUE: i32 = 300;
+const SOLVES_BEFORE_DECAY: i32 = 1;
 
 #[derive(FromRow, Decode, serde::Deserialize, serde::Serialize, Debug)]
 pub struct UserInstance {
@@ -74,9 +82,9 @@ impl UserInstance {
     pub fn get_dead_guy_user() -> Self {
         UserInstance {
             id: -1,
-            username: "dead guy".to_string(),
-            password: "dead guy".to_string(),
-            email: "dead guy".to_string(),
+            username: "".to_string(),
+            password: "".to_string(),
+            email: "".to_string(),
             challenge_solved: vec![],
             bio: "no account matched that username".to_string(),
             is_locked: false,
@@ -154,7 +162,7 @@ pub async fn db_filter_for_user(db_connection: &DbConnection, filter: DbFilter<U
         }
     }
     
-    let mut query = format!("SELECT * FROM {table_name} {filter_statement}", table_name=DB_USER_TABLE, filter_statement=filter_statement);
+    let mut query = format!("SELECT * FROM {table_name} {filter_statement} ", table_name=DB_USER_TABLE, filter_statement=filter_statement);
 
     if limit != -1 {
         query.push_str("LIMIT $1");
@@ -220,13 +228,54 @@ pub async fn db_edit_user(db_connection: &DbConnection, user: UserInstance) -> R
 }
 
 pub async fn db_delete_user(db_connection: &DbConnection, user_id: i32) -> Result<bool, sqlx::Error> {
+    let user = db_get_user_by_id(db_connection, user_id).await.unwrap_or(UserInstance::get_dead_guy_user());
+    if user.id == -1 {
+        return Ok(false);
+    }
+
     let query = format!("DELETE FROM {table_name} WHERE id = $1", table_name=DB_USER_TABLE);
     let result: PgQueryResult = sqlx::query(&query[..])
-        .bind(user_id)
-        .execute(&db_connection.pool).await.unwrap();
+        .bind(user.id)
+        .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
 
     if result.rows_affected() > 0 {
-        return Ok(true);
+        let query = format!("DELETE FROM {table_name} WHERE username = $1", table_name=DB_SOLVE_HISTORY_TABLE);
+        let result: PgQueryResult = sqlx::query(&query[..])
+            .bind(user.username.to_owned())
+            .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
+
+        if result.rows_affected() > 0 {
+            let mut is_err = false;
+            for chall_name in user.challenge_solved {
+                let query = format!("UPDATE {table_name} SET solved_by = array_remove(solved_by, $1) WHERE challenge_name = $2", table_name=DB_CHALLENGE_TABLE);
+                let result: PgQueryResult = sqlx::query(&query[..])
+                    .bind(user.username.to_owned())
+                    .bind(chall_name.to_owned())
+                    .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
+                
+                if result.rows_affected() == 0 {
+                    is_err = true;
+                }
+
+                let chall = db_connection.get_challenge_by_name(chall_name.to_owned()).await;
+                let score = (MINIMUM_SCORE - INITIAL_SCORE)/(DECAY_VALUE);
+                let score = score * (i32::try_from((chall.solved_by.len()-1).pow(2)).unwrap() - SOLVES_BEFORE_DECAY);
+                let score = score + INITIAL_SCORE;
+
+                let query = format!("UPDATE {table_name} SET score = $1 WHERE challenge_name = $2", table_name=DB_CHALLENGE_TABLE);
+                let result: PgQueryResult = sqlx::query(&query[..])
+                    .bind(score)
+                    .bind(chall_name.to_owned())
+                    .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
+
+                if result.rows_affected() == 0 {
+                    is_err = true;
+                }
+            }
+
+            return Ok(!is_err);            
+        }
+        return Ok(false);
     }
     return Ok(false);
 }
@@ -237,9 +286,7 @@ pub async fn db_user_login(db_connection: &DbConnection, username: &str, passwor
 
     let user = sqlx::query_as(&query[..])
         .bind(username)
-        .fetch_one(&db_connection.pool).await.unwrap_or_else(|_| {
-            UserInstance::get_dead_guy_user()
-        });
+        .fetch_one(&db_connection.pool).await.unwrap_or(UserInstance::get_dead_guy_user());
     
     let result = bcrypt_verify(password, &user.password[..]).unwrap_or(false);
     

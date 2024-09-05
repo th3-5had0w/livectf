@@ -193,10 +193,6 @@ impl DbConnection {
     //     )
     // }
 
-    pub async fn get_challenge_score(&self, name: String) -> i32 {
-        challenge::db_get_challenge_score(&self, name).await
-    }
-
     pub async fn store_challenge_metadata(&self, chall: ChallengeData) -> bool {
         challenge::db_store_challenge_metadata(&self, chall).await
     }

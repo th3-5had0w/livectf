@@ -11,20 +11,20 @@ use crate::notifier::{craft_type_notify_message, Notifier, NotifierCommInfo, Not
 use crate::database::{challenge, DbConnection};
 use crate::utils::{is_time_schedule_valid, MAGIC_TIME};
 use crate::web_interface::{get_error, success, get_jwt_claims, forbiden, unauthorized};
-struct ChallengeUploadHandlerCtx {
-    sender: Sender<(String, Vec<u8>)>,
-    listener: Receiver<Vec<u8>>,
+// struct ChallengeUploadHandlerCtx {
+//     sender: Sender<(String, Vec<u8>)>,
+//     listener: Receiver<Vec<u8>>,
     
-    db_conn: DbConnection
-}
+//     db_conn: DbConnection
+// }
 
-pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>, db_conn: DbConnection) {
-    let (notifier_sender, my_receiver) : (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
-    let ctx = ChallengeUploadHandlerCtx {
-        sender: my_sender,
-        listener: my_receiver,
-        db_conn
-    };
+pub(crate) fn init(notifier: &mut Notifier, _my_sender: Sender<(String, Vec<u8>)>, _db_conn: DbConnection) {
+    let (notifier_sender, _my_receiver) : (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
+    // let ctx = ChallengeUploadHandlerCtx {
+    //     sender: my_sender,
+    //     listener: my_receiver,
+    //     db_conn
+    // };
 
 
     let comm_info = NotifierCommInfo {
@@ -45,8 +45,8 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, db_conn: 
         return Ok(forbiden("Not authenticated"));
     }
 
-    let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap();
-    if is_admin == false {
+    let is_admin = claims.get("is_admin").unwrap_or(&"false".to_string()).parse::<bool>().unwrap_or(false);
+    if !is_admin {
         return Ok(unauthorized("You are not admin"));
     }
 

@@ -95,7 +95,7 @@ pub async fn db_save_solve_result(db_connection: &DbConnection, solve_entry: Sol
         .bind(solve_entry.is_success())
         .bind(solve_entry.raw_time())
         .bind(solve_entry.submit_content())
-        .execute(&db_connection.pool).await.unwrap();
+        .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
 
     if result.rows_affected() > 0 {
         return Ok(true);
@@ -177,7 +177,7 @@ pub async fn db_filter_for_solve_history(
         }
     }
     
-    let mut query = format!("SELECT * FROM {table_name} {filter_statement} order by time DESC", table_name=DB_SOLVE_HISTORY_TABLE, filter_statement=filter_statement);
+    let mut query = format!("SELECT * FROM {table_name} {filter_statement} order by time DESC ", table_name=DB_SOLVE_HISTORY_TABLE, filter_statement=filter_statement);
 
     if limit != -1 {
         query.push_str("LIMIT $1");
