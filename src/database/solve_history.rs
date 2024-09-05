@@ -177,19 +177,7 @@ pub async fn db_filter_for_solve_history(
         }
     }
     
-    let mut query = format!("
-    SELECT 
-        id,
-        challenge_name,
-        username,
-        is_success,
-        time,
-        submit_content
-    FROM 
-        {table_name}
-    {filter_statement}
-    order by time DESC
-    ", table_name=DB_SOLVE_HISTORY_TABLE, filter_statement=filter_statement);
+    let mut query = format!("SELECT * FROM {table_name} {filter_statement} order by time DESC", table_name=DB_SOLVE_HISTORY_TABLE, filter_statement=filter_statement);
 
     if limit != -1 {
         query.push_str("LIMIT $1");

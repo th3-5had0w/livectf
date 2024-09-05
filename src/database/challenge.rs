@@ -100,21 +100,7 @@ pub async fn db_challenge_solve(db_connection: &DbConnection, chall_name: String
 }
 
 pub async fn db_get_challenge_by_name(db_connection: &DbConnection, name: String) -> ChallengeData {
-    let query = format!("
-    SELECT 
-        id,
-        challenge_name,
-        score,
-        category,
-        solved_by,
-        running,
-        connection_string
-    FROM 
-        {table_name}
-    WHERE 
-        challenge_name=$1;",
-        table_name=DB_CHALLENGE_TABLE
-    );
+    let query = format!("SELECT * FROM {table_name} WHERE challenge_name=$1;", table_name=DB_CHALLENGE_TABLE);
 
 
     let chall = sqlx::query_as(&query[..])
@@ -133,21 +119,7 @@ pub async fn db_get_challenge_by_name(db_connection: &DbConnection, name: String
 }
 
 pub async fn db_get_all_running_challenges(db_connection: &DbConnection) -> Vec<ChallengeData> {
-    let query = format!("
-    SELECT 
-        id,
-        challenge_name,
-        score,
-        category,
-        solved_by,
-        running,
-        connection_string
-    FROM 
-        {table_name}
-    WHERE 
-        running=true",
-        table_name=DB_CHALLENGE_TABLE
-    );
+    let query = format!("SELECT * FROM {table_name} WHERE running=true", table_name=DB_CHALLENGE_TABLE);
 
 
     let challs = sqlx::query_as(&query[..])

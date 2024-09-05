@@ -320,8 +320,7 @@ pub async fn db_get_user_by_id(db_connection: &DbConnection, user_id: i32) -> Re
 }
 
 pub async fn db_get_user_by_name(db_connection: &DbConnection, name: String) -> Result<UserInstance, sqlx::Error> {
-    let query = format!("
-    SELECT * FROM {table_name} WHERE username=$1;", table_name=DB_USER_TABLE);
+    let query = format!("SELECT * FROM {table_name} WHERE username=$1;", table_name=DB_USER_TABLE);
 
 
     let user = sqlx::query_as(&query[..])
