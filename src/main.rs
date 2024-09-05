@@ -1,6 +1,7 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 
 use actix_web::{App, HttpServer, web};
+use database::user::UserInstance;
 use notifier::{Notifier, NotifierComms};
 use actix_files;
 
@@ -27,6 +28,21 @@ async fn main() -> std::io::Result<()> {
     };
 
     let db_conn = database::new_db_connection().await.expect("can't open connection to database");
+
+    let admin_username = uuid::Uuid::new_v4().to_string();
+    let secret_password = uuid::Uuid::new_v4().to_string();
+    let result = db_conn.create_user(UserInstance::new(
+        admin_username.as_str(),
+        secret_password.as_str(),
+        "youremail@gmail.com",
+        true
+    )).await;
+
+    if !result {
+        panic!("Cannot create admin user");
+    }
+
+    println!("Admin credential is: \n\t{}\n\t{}", admin_username, secret_password);
 
     challenge_upload_handler::init(&mut notifier, slave_sender.clone(), db_conn.clone());
     deployer::init(&mut notifier, slave_sender.clone(), db_conn.clone());
