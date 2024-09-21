@@ -1,4 +1,5 @@
-use std::{collections::HashMap, fs::File, io::Write, process::Command, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
+use core::fmt;
+use std::{collections::HashMap, fmt::Display, fs::File, io::Write, process::Command, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
 
 use rand::Rng;
 use uuid::Uuid;
@@ -13,6 +14,21 @@ struct Challenge {
     flag: String,
     port: u16
 }
+
+#[derive(Debug)]
+enum Error {
+    BuildFail(String),
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::BuildFail(err) => write!(f, "Error: {}", err)
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 struct DeployerCtx {
     // main comm channel
@@ -92,7 +108,7 @@ fn deployer_loop(mut ctx: DeployerCtx) {
     }
 }
 
-fn cmd_schedule(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
+fn cmd_schedule(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
 
     let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename");
     let start_time = data.get("start_time").expect("missing start_time");
@@ -102,10 +118,8 @@ fn cmd_schedule(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
 
         if unpack_success {
             let flag = generate_challenge_flag(challenge_filename);
-            let (build_success, challenge_image) = build_challenge(challenge_filename);
-            if build_success {
-
-                let challenge_image = String::from_utf8(challenge_image)
+            let challenge_image = build_challenge(challenge_filename)?;
+            let challenge_image = String::from_utf8(challenge_image)
                                                     .expect("failed converting docker image name")
                                                     .trim().replace("sha256:", "");
                 
@@ -120,13 +134,10 @@ fn cmd_schedule(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
                 let data = craft_type_notify_message(&target_module, &["enqueue", &challenge_filename.to_string(), &start_time.to_string(), &end_time.to_string()]);
                 ctx.sender.send((target_module, data)).expect("deployer cannot send");
 
-            } else {
-                println!("build failed");
-            }
-
         } else {
             println!("unpack failed");
         }
+        Ok(())
 }
 
 fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
@@ -210,22 +221,27 @@ fn unpack_challenge(challenge_filename: &String) -> bool {
     return output.status.success();
 }
 
-fn build_challenge(challenge_filename: &String) -> (bool, Vec<u8>) {
+fn build_challenge(challenge_filename: &String) -> Result<Vec<u8>, Error> {
+
     let build_path = format!("./archives/{}/chall", &challenge_filename);
+
     let output = Command::new("docker")
                                 .args(["build", "-q", "."])
                                 .current_dir(format!("{}", build_path))
                                 .output()
                                 .expect("failed running bash shell");
-    return (output.status.success(), output.stdout);
+
+    if !output.status.success() {
+        return Err(Error::BuildFail(String::from_utf8(output.stderr).unwrap()))
+    }
+    Ok(output.stdout)
 }
 
 fn deploy_challenge(challenge_filename: &String, challenge_image: &String, port: u16) -> bool {
     let portmap = format!("{}:5000", port);
     let output = Command::new("docker")
                                 .args(["run", "-p", &portmap, "-d", "--name", challenge_filename, "--privileged", challenge_image])
-                                .output()
-                                .expect("failed running bash shell");
+                                .output().map_err(|e| )?;
     return output.status.success();
 }
 
