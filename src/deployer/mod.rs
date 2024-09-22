@@ -1,4 +1,3 @@
-use core::fmt;
 use std::{collections::HashMap, fmt::Display, fs::File, io::Write, process::Command, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
 
 use rand::Rng;
@@ -17,13 +16,21 @@ struct Challenge {
 
 #[derive(Debug)]
 enum Error {
-    BuildFail(String),
+    Build(String),
+    Unpack(String),
+    GenerateFlag(String),
+    Deploy(String),
+    Destroy(String)
 }
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::BuildFail(err) => write!(f, "Error: {}", err)
+            Error::Build(err) => write!(f, "Deployer - BuildFail: {}", err),
+            Error::Unpack(err) => write!(f, "Deployer - UnpackFail: {}", err),
+            Error::GenerateFlag(err) => write!(f, "Deployer - GenerateFlagFail: {}", err),
+            Error::Deploy(err) => write!(f, "Deployer - DeployFail: {}", err),
+            Error::Destroy(err) => write!(f, "Deployer - DestroyFail: {}", err)
         }
     }
 }
@@ -100,9 +107,15 @@ fn deployer_loop(mut ctx: DeployerCtx) {
         let serialized_data = ctx.listener.recv().expect("deployer channel communication exited");
         let data = deserialize_data(&serialized_data);
         match data.get("cmd").expect("missing cmd").as_str() {
-            "deploy" => cmd_deploy(&mut ctx, &data),
-            "schedule" => cmd_schedule(&mut ctx, &data),
-            "destroy" => cmd_destroy(&mut ctx, &data),
+            "deploy" => if let Err(err) = cmd_deploy(&mut ctx, &data) {
+                todo!("handle!")
+            },
+            "schedule" => if let Err(err) = cmd_schedule(&mut ctx, &data) {
+                todo!("return to challenge uploader")
+            },
+            "destroy" => if let Err(err) = cmd_destroy(&mut ctx, &data) {
+                todo!("handle!")
+            },
             _ => panic!("unknown cmd")
         }
     }
@@ -114,33 +127,24 @@ fn cmd_schedule(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(
     let start_time = data.get("start_time").expect("missing start_time");
     let end_time = data.get("end_time").expect("missing end_time");
 
-        let unpack_success = unpack_challenge(challenge_filename);
+    unpack_challenge(challenge_filename)?;
+    let flag = generate_challenge_flag(challenge_filename)?;
+    let challenge_image = build_challenge(challenge_filename)?;
+            
+    ctx.challenges.push(Challenge {
+        challenge_image,
+        challenge_filename: challenge_filename.to_string(),
+        flag,
+        port: 0,
+    });
 
-        if unpack_success {
-            let flag = generate_challenge_flag(challenge_filename);
-            let challenge_image = build_challenge(challenge_filename)?;
-            let challenge_image = String::from_utf8(challenge_image)
-                                                    .expect("failed converting docker image name")
-                                                    .trim().replace("sha256:", "");
-                
-                ctx.challenges.push(Challenge {
-                    challenge_image,
-                    challenge_filename: challenge_filename.to_string(),
-                    flag,
-                    port: 0,
-                });
-
-                let target_module = String::from("timer");
-                let data = craft_type_notify_message(&target_module, &["enqueue", &challenge_filename.to_string(), &start_time.to_string(), &end_time.to_string()]);
-                ctx.sender.send((target_module, data)).expect("deployer cannot send");
-
-        } else {
-            println!("unpack failed");
-        }
-        Ok(())
+    let target_module = String::from("timer");
+    let data = craft_type_notify_message(&target_module, &["enqueue", &challenge_filename.to_string(), &start_time.to_string(), &end_time.to_string()]);
+    ctx.sender.send((target_module, data)).expect("deployer cannot send");
+    Ok(())
 }
 
-fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
+fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
     let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename");
     let rt = Runtime::new().expect("failed creating tokio runtime");
 
@@ -156,55 +160,57 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
     }
     ctx.set_challenge_port(challenge_filename, port);
     let challenge = ctx.get_challenge(challenge_filename);
-    
-    let deploy_success = deploy_challenge(&challenge.challenge_filename, &challenge.challenge_image, challenge.port);
 
-    if deploy_success {
-
-        let target_module = String::from_str("flag_receiver").unwrap();
-        let cmd = String::from_str("flag_info").unwrap();
-        let data = notifier::craft_type_notify_message(&target_module, &[cmd, challenge_filename.to_string(), challenge.flag]);
-        ctx.sender.send((target_module, data)).expect("deployer cannot send");
-        
-        let conn_string = format!("nc localhost {}", challenge.port);
-        rt.block_on(ctx.db_conn.set_challenge_connection_string(challenge_filename.to_string(), conn_string));
-        rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), true));
-
-        println!("Deploy success {}", challenge_filename);
-    } else {
-
-        let target_module = String::from_str("timer").unwrap();
-        let cmd = String::from_str("deploy_info").unwrap();
-        let data = notifier::craft_type_notify_message(&target_module, &[cmd, challenge_filename.to_string(), "fail".to_string()]);
-        ctx.sender.send((target_module, data)).expect("deployer cannot send");
-        ctx.challenges.retain(|challenge| &challenge.challenge_filename != challenge_filename);
-        println!("Deploy failed {}", challenge_filename);
+    match deploy_challenge(&challenge.challenge_filename, &challenge.challenge_image, challenge.port) {
+        Ok(_) => {
+            let target_module = String::from_str("flag_receiver").unwrap();
+            let cmd = String::from_str("flag_info").unwrap();
+            let data = notifier::craft_type_notify_message(&target_module, &[cmd, challenge_filename.to_string(), challenge.flag]);
+            ctx.sender.send((target_module, data)).expect("deployer cannot send");
+            let conn_string = format!("nc localhost {}", challenge.port);
+            rt.block_on(ctx.db_conn.set_challenge_connection_string(challenge_filename.to_string(), conn_string));
+            rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), true));
+            println!("Deploy success {}", challenge_filename);
+            Ok(())
+        }
+        Err(err) => {
+            let target_module = String::from_str("timer").unwrap();
+            let cmd = String::from_str("deploy_info").unwrap();
+            let data = notifier::craft_type_notify_message(&target_module, &[cmd, challenge_filename.to_string(), "fail".to_string()]);
+            ctx.sender.send((target_module, data)).expect("deployer cannot send");
+            ctx.challenges.retain(|challenge| &challenge.challenge_filename != challenge_filename);
+            println!("Deploy failed {}", challenge_filename);
+            Err(err)
+        }
     }
 }
 
-fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) {
+fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+
     let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename");
     let rt = Runtime::new().expect("failed creating tokio runtime");
-    let destroy_success = destroy_challenge(challenge_filename); 
-    if destroy_success {
-        let target_module = String::from_str("flag_receiver").unwrap();
-        let data = notifier::craft_type_notify_message(&target_module, &["cleanup", challenge_filename]);
-        ctx.sender.send((target_module, data)).expect("deployer cannot send");
-
-        ctx.challenges.retain(|challenge| &challenge.challenge_filename != challenge_filename);
-        rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), false));
-    }
-    else {
-        println!("destroy failed");
-    }
+    destroy_challenge(challenge_filename)?;
+    let target_module = String::from_str("flag_receiver").unwrap();
+    let data = notifier::craft_type_notify_message(&target_module, &["cleanup", challenge_filename]);
+    ctx.sender.send((target_module, data)).expect("deployer cannot send");
+    ctx.challenges.retain(|challenge| &challenge.challenge_filename != challenge_filename);
+    rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), false));
+    Ok(())
 }
 
-fn destroy_challenge(challenge_filename: &String) -> bool {
+fn destroy_challenge(challenge_filename: &String) -> Result<(), Error> {
     let output = Command::new("docker")
                                 .args(["rm", "-f", challenge_filename])
                                 .output()
                                 .expect("failed running bash shell");
-    return output.status.success();
+
+    if !output.status.success() {
+        return Err(Error::Destroy(
+            String::from_utf8(output.stderr).unwrap()
+        ))
+    }
+
+    Ok(())
 }
 
 fn deserialize_data(serialized_data: &Vec<u8>) -> HashMap<&str, String> {
@@ -212,16 +218,23 @@ fn deserialize_data(serialized_data: &Vec<u8>) -> HashMap<&str, String> {
     return data;
 }
 
-fn unpack_challenge(challenge_filename: &String) -> bool {
+fn unpack_challenge(challenge_filename: &String) -> Result<(), Error> {
     let output = Command::new("tar")
                                 .args(["-xf", &format!("{}.tar.gz", challenge_filename), "--one-top-level"])
                                 .current_dir("./archives")
                                 .output()
                                 .expect("failed running bash shell");
-    return output.status.success();
+
+    if !output.status.success() {
+        return Err(Error::Unpack(
+            String::from_utf8(output.stderr).unwrap()
+        ))
+    }
+
+    Ok(())
 }
 
-fn build_challenge(challenge_filename: &String) -> Result<Vec<u8>, Error> {
+fn build_challenge(challenge_filename: &String) -> Result<String, Error> {
 
     let build_path = format!("./archives/{}/chall", &challenge_filename);
 
@@ -232,23 +245,43 @@ fn build_challenge(challenge_filename: &String) -> Result<Vec<u8>, Error> {
                                 .expect("failed running bash shell");
 
     if !output.status.success() {
-        return Err(Error::BuildFail(String::from_utf8(output.stderr).unwrap()))
+        return Err(Error::Build(
+            String::from_utf8(output.stderr).unwrap()
+        ))
     }
-    Ok(output.stdout)
+    
+    let image_hash = String::from_utf8(output.stdout)
+                                .map_err(|e| Error::Build(format!("{}", e)))?
+                                .trim().replace("sha256:", "");
+    Ok(image_hash)
 }
 
-fn deploy_challenge(challenge_filename: &String, challenge_image: &String, port: u16) -> bool {
+fn deploy_challenge(challenge_filename: &String, challenge_image: &String, port: u16) -> Result<(), Error> {
     let portmap = format!("{}:5000", port);
     let output = Command::new("docker")
                                 .args(["run", "-p", &portmap, "-d", "--name", challenge_filename, "--privileged", challenge_image])
-                                .output().map_err(|e| )?;
-    return output.status.success();
+                                .output()
+                                .expect("failed running bash shell");
+    
+    if !output.status.success() {
+        return Err(
+            Error::Deploy(
+                String::from_utf8(output.stderr).unwrap()
+            )
+        )
+    }
+
+    Ok(())
 }
 
-fn generate_challenge_flag(challenge_filename: &String) -> String {
+fn generate_challenge_flag(challenge_filename: &String) -> Result<String, Error> {
     let flag = format!("coslivectf{{{}}}", Uuid::new_v4());
     let flag_file_path = format!("./archives/{}/chall/dist/flag", challenge_filename);
-    let mut flag_file = File::create(flag_file_path).expect("failed creating flag file");
-    flag_file.write_all(flag.as_bytes()).unwrap();
-    return flag;
+
+    let mut flag_file = File::create(flag_file_path)
+                                    .map_err(|e| Error::GenerateFlag(format!("{}", e)))?;
+
+    flag_file.write_all(flag.as_bytes()).map_err(|e| Error::GenerateFlag(format!("{}", e)))?;
+
+    Ok(flag)
 }
