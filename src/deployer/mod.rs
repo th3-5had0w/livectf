@@ -10,7 +10,7 @@ use crate::{database::DbConnection, notifier::{self, craft_type_notify_message, 
 struct Challenge {
     challenge_filename: String,
     challenge_image: String,
-    flag: String,
+    container_id: String,
     port: u16
 }
 
@@ -20,7 +20,8 @@ enum Error {
     Unpack(String),
     GenerateFlag(String),
     Deploy(String),
-    Destroy(String)
+    Destroy(String),
+    Firewall(String),
 }
 
 impl Display for Error {
@@ -30,7 +31,8 @@ impl Display for Error {
             Error::Unpack(err) => write!(f, "Deployer - UnpackFail: {}", err),
             Error::GenerateFlag(err) => write!(f, "Deployer - GenerateFlagFail: {}", err),
             Error::Deploy(err) => write!(f, "Deployer - DeployFail: {}", err),
-            Error::Destroy(err) => write!(f, "Deployer - DestroyFail: {}", err)
+            Error::Destroy(err) => write!(f, "Deployer - DestroyFail: {}", err),
+            Error::Firewall(err) => write!(f, "Deployer - FirewallConfigFail: {}", err)
         }
     }
 }
@@ -43,12 +45,12 @@ struct DeployerCtx {
     listener: Receiver<Vec<u8>>,
     
     db_conn: DbConnection,
-    challenges: Vec<Challenge>
+    running_deployments: Vec<Challenge>
 }
 
 impl DeployerCtx {
     fn is_port_used(&self, port: u16) -> bool {
-        for challenge in &self.challenges {
+        for challenge in &self.running_deployments {
             if challenge.port == port {
                 return true;
             }
@@ -58,7 +60,7 @@ impl DeployerCtx {
 
     fn set_challenge_port(&mut self, challenge_filename: &String, port: u16) {
         let mut exist: bool = false;
-        for challenge in self.challenges.iter_mut() {
+        for challenge in self.running_deployments.iter_mut() {
             if challenge.challenge_filename == challenge_filename.to_string() {
                 challenge.port = port;
                 exist = true;
@@ -69,7 +71,7 @@ impl DeployerCtx {
     }
 
     fn get_challenge(&mut self, challenge_filename: &String) -> Challenge {
-        for challenge in self.challenges.clone() {
+        for challenge in self.running_deployments.clone() {
             if challenge.challenge_filename == challenge_filename.to_string() {
                 return challenge;
             }
@@ -85,7 +87,7 @@ pub fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>, db_co
         sender: my_sender,
         listener: my_receiver,
         db_conn,
-        challenges: Vec::new(),
+        running_deployments: Vec::new(),
     };
 
     
@@ -110,9 +112,6 @@ fn deployer_loop(mut ctx: DeployerCtx) {
             "deploy" => if let Err(err) = cmd_deploy(&mut ctx, &data) {
                 todo!("handle!")
             },
-            "schedule" => if let Err(err) = cmd_schedule(&mut ctx, &data) {
-                todo!("return to challenge uploader")
-            },
             "destroy" => if let Err(err) = cmd_destroy(&mut ctx, &data) {
                 todo!("handle!")
             },
@@ -121,31 +120,27 @@ fn deployer_loop(mut ctx: DeployerCtx) {
     }
 }
 
-fn cmd_schedule(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
-
-    let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename");
-    let start_time = data.get("start_time").expect("missing start_time");
-    let end_time = data.get("end_time").expect("missing end_time");
-
-    unpack_challenge(challenge_filename)?;
-    let flag = generate_challenge_flag(challenge_filename)?;
-    let challenge_image = build_challenge(challenge_filename)?;
-            
-    ctx.challenges.push(Challenge {
-        challenge_image,
-        challenge_filename: challenge_filename.to_string(),
-        flag,
-        port: 0,
-    });
-
-    let target_module = String::from("timer");
-    let data = craft_type_notify_message(&target_module, &["enqueue", &challenge_filename.to_string(), &start_time.to_string(), &end_time.to_string()]);
-    ctx.sender.send((target_module, data)).expect("deployer cannot send");
-    Ok(())
-}
-
 fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
-    let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename");
+
+    let challenge_filename = data.get("challenge_filename")
+                                                .ok_or(Error::Deploy(
+                                                    String::from_str("invalid challenge filename").unwrap()
+                                                ))?.to_owned();
+
+    let start_time = data.get("start_time")
+                                                .ok_or(Error::Deploy(
+                                                    String::from_str("invalid start time").unwrap()
+                                                ))?;
+
+    let interval = data.get("interval")
+                                                .ok_or(Error::Deploy(
+                                                    String::from_str("invalid interval").unwrap()
+                                                ))?;
+
+    unpack_challenge(&challenge_filename)?;
+    let flag = generate_challenge_flag(&challenge_filename)?;
+    let challenge_image = build_challenge(&challenge_filename)?;                                                
+
     let rt = Runtime::new().expect("failed creating tokio runtime");
 
     let mut rng = rand::thread_rng();
@@ -158,31 +153,64 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(),
             break
         }
     }
-    ctx.set_challenge_port(challenge_filename, port);
-    let challenge = ctx.get_challenge(challenge_filename);
 
-    match deploy_challenge(&challenge.challenge_filename, &challenge.challenge_image, challenge.port) {
-        Ok(_) => {
-            let target_module = String::from_str("flag_receiver").unwrap();
-            let cmd = String::from_str("flag_info").unwrap();
-            let data = notifier::craft_type_notify_message(&target_module, &[cmd, challenge_filename.to_string(), challenge.flag]);
-            ctx.sender.send((target_module, data)).expect("deployer cannot send");
-            let conn_string = format!("nc localhost {}", challenge.port);
-            rt.block_on(ctx.db_conn.set_challenge_connection_string(challenge_filename.to_string(), conn_string));
-            rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), true));
-            println!("Deploy success {}", challenge_filename);
-            Ok(())
+    let container_id = deploy_challenge(&challenge_filename, &challenge_image, port)?;
+    let target_module = String::from_str("flag_receiver").unwrap();
+    let cmd = String::from_str("flag_info").unwrap();
+    let data = notifier::craft_type_notify_message(&target_module, &[&cmd, &challenge_filename.to_string(), &flag]);
+    ctx.sender.send((target_module, data)).expect("deployer cannot send");
+    let conn_string = format!("nc localhost {}", port);
+    rt.block_on(ctx.db_conn.set_challenge_connection_string(challenge_filename.to_string(), conn_string));
+    rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), true));
+    set_port_access(PortAccess::Add(port))?;
+
+    {
+        let target_module = String::from("timer");
+        let data = craft_type_notify_message(&target_module, &["enqueue", &challenge_filename.to_string(), &start_time.to_string(), &interval.to_string()]);
+        ctx.sender.send((target_module, data)).expect("deployer cannot send");
+    }
+
+    ctx.running_deployments.push(
+        Challenge { 
+            challenge_filename,
+            challenge_image,
+            container_id,
+            port
         }
-        Err(err) => {
-            let target_module = String::from_str("timer").unwrap();
-            let cmd = String::from_str("deploy_info").unwrap();
-            let data = notifier::craft_type_notify_message(&target_module, &[cmd, challenge_filename.to_string(), "fail".to_string()]);
-            ctx.sender.send((target_module, data)).expect("deployer cannot send");
-            ctx.challenges.retain(|challenge| &challenge.challenge_filename != challenge_filename);
-            println!("Deploy failed {}", challenge_filename);
-            Err(err)
+    );
+
+    Ok(())
+}
+
+enum PortAccess {
+    Add(u16),
+    Remove(u16)
+}
+
+fn set_port_access(status: PortAccess) -> Result<(), Error> {
+    match status {
+        PortAccess::Add(port) => {
+            let output = Command::new("firewall-cmd")
+                                        .args([format!("--add-port={}/tcp", port)])
+                                        .output()
+                                        .expect("failed running bash shell");
+            
+            if !output.status.success() {
+                return Err(Error::Firewall(format!("allow {}", port)));
+            }
+        }
+        PortAccess::Remove(port) => {
+            let output = Command::new("firewall-cmd")
+                                        .args([format!("--remove-port={}/tcp", port)])
+                                        .output()
+                                        .expect("failed running bash shell");
+            
+            if !output.status.success() {
+                return Err(Error::Firewall(format!("remove {}", port)));
+            }
         }
     }
+    Ok(())
 }
 
 fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
@@ -193,7 +221,7 @@ fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<()
     let target_module = String::from_str("flag_receiver").unwrap();
     let data = notifier::craft_type_notify_message(&target_module, &["cleanup", challenge_filename]);
     ctx.sender.send((target_module, data)).expect("deployer cannot send");
-    ctx.challenges.retain(|challenge| &challenge.challenge_filename != challenge_filename);
+    ctx.running_deployments.retain(|challenge| &challenge.challenge_filename != challenge_filename);
     rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), false));
     Ok(())
 }
@@ -256,7 +284,7 @@ fn build_challenge(challenge_filename: &String) -> Result<String, Error> {
     Ok(image_hash)
 }
 
-fn deploy_challenge(challenge_filename: &String, challenge_image: &String, port: u16) -> Result<(), Error> {
+fn deploy_challenge(challenge_filename: &String, challenge_image: &String, port: u16) -> Result<String, Error> {
     let portmap = format!("{}:5000", port);
     let output = Command::new("docker")
                                 .args(["run", "-p", &portmap, "-d", "--name", challenge_filename, "--privileged", challenge_image])
@@ -271,7 +299,10 @@ fn deploy_challenge(challenge_filename: &String, challenge_image: &String, port:
         )
     }
 
-    Ok(())
+    let container_id = String::from_utf8(output.stdout)
+                                                            .map_err(|e| Error::Deploy(format!("{}", e)))?;
+
+    Ok(container_id)
 }
 
 fn generate_challenge_flag(challenge_filename: &String) -> Result<String, Error> {
