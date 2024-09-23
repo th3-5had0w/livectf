@@ -139,3 +139,28 @@ a:hover {
     display: inline-block;
     transform: rotate(-45deg) !important;
 }
+
+.challenge-dragging {
+    border: 3px dashed black;
+    padding: 120px;
+} 
+
+.upload-info {
+    display: none;
+}
+
+.upload-entry {
+    display: flex;
+    padding: 10px;
+    align-items: center;
+    justify-content: space-between;
+    width: 300px;
+    border: 3px dashed black;
+    margin: 20px;
+}
+
+.visibility-form {
+    display: flex;
+    flex-direction: column;
+    border: none;
+}

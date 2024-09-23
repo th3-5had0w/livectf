@@ -51,3 +51,7 @@ a {
 .page-nav a {
     font-size: 30px;
 }
+
+.username-col {
+    width: 100%;
+}

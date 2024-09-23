@@ -1,9 +1,12 @@
-use std::{process::Command, fs};
+use std::io::Read;
+use std::{process::Command, fs, vec::Vec};
 use std::time::{SystemTime, UNIX_EPOCH};
 use core::cmp::Ordering;
 
 use crate::database::user::UserInstance;
 use crate::database::DbConnection;
+use crate::web_interface::challenge::DecompressedEntry;
+use crate::deployer::Error;
 
 #[derive(Clone, Eq, PartialEq, Ord)]
 pub struct ScoreBoardUser {
@@ -139,4 +142,44 @@ pub async fn get_user_score(db_conn: DbConnection, user_id: i32) -> u64 {
     }
 
     return total_score;
+}
+
+pub fn read_dir_to_decompressed_entries(dir: fs::ReadDir) -> Vec<DecompressedEntry> {
+    let mut result: Vec<DecompressedEntry> = vec![];
+    for entry in dir {
+        let entry = entry.unwrap();
+        if entry.file_type().unwrap().is_dir() {
+            result.extend(read_dir_to_decompressed_entries(fs::read_dir(entry.path()).unwrap()))
+        } else {
+            let filename = entry.file_name().into_string().unwrap();
+            let mut f = fs::File::open(entry.path()).unwrap();
+            let mut content  = vec![];
+            f.read_to_end(content.as_mut()).unwrap();
+
+                
+            result.push(DecompressedEntry {
+                filename,
+                is_public: false,
+                content
+            });
+        }
+    }
+
+    result
+}
+
+pub fn unpack(challenge_filename: &String, dest: &str) -> Result<(), Error> {
+    let output = Command::new("tar")
+                                .args(["-xf", &format!("{}", challenge_filename), "--one-top-level"])
+                                .current_dir(dest)
+                                .output()
+                                .expect("failed running bash shell");
+
+    if !output.status.success() {
+        return Err(Error::Unpack(
+            String::from_utf8(output.stderr).unwrap()
+        ))
+    }
+
+    Ok(())
 }

@@ -23,39 +23,39 @@ Array.from(document.querySelectorAll(".ban-btn")).map(btn => {
     }
 })
 
-document.querySelector("#upload-challenge").addEventListener("click", async (e) => {
-    const data = new FormData(document.querySelector(".challenge-upload-form"));
+// document.querySelector("#upload-challenge").addEventListener("click", async (e) => {
+//     const data = new FormData(document.querySelector(".challenge-upload-form"));
 
-    e.preventDefault();
+//     e.preventDefault();
     
-    let parsedStartTime = new Date(document.querySelector("#start-date").value + "T" + document.querySelector("#start-time").value + "Z");
-    let parsedEndTime = new Date(document.querySelector("#end-date").value + "T" + document.querySelector("#end-time").value + "Z");
+//     let parsedStartTime = new Date(document.querySelector("#start-date").value + "T" + document.querySelector("#start-time").value + "Z");
+//     let parsedEndTime = new Date(document.querySelector("#end-date").value + "T" + document.querySelector("#end-time").value + "Z");
 
-    parsedStartTime = Math.floor(parsedStartTime.getTime() / 1000);
-    parsedEndTime = Math.floor(parsedEndTime.getTime() / 1000);
+//     parsedStartTime = Math.floor(parsedStartTime.getTime() / 1000);
+//     parsedEndTime = Math.floor(parsedEndTime.getTime() / 1000);
 
-    let result = await fetch("/api/challenge-upload", {
-        method: "POST",
-        mode: "cors",
-        credentials: "include",
-        body: data,
-        headers: {
-            "X-start": parsedStartTime,
-            "X-end": parsedEndTime
-        }
-    });
+//     let result = await fetch("/api/challenge-upload", {
+//         method: "POST",
+//         mode: "cors",
+//         credentials: "include",
+//         body: data,
+//         headers: {
+//             "X-start": parsedStartTime,
+//             "X-end": parsedEndTime
+//         }
+//     });
 
-    result = await result.json();
+//     result = await result.json();
 
-    if (!result.is_error) {
-        alert(result.message);
-        location.reload();
-    } else {
-        alert(result.message);
-    }
-})
+//     if (!result.is_error) {
+//         alert(result.message);
+//         location.reload();
+//     } else {
+//         alert(result.message);
+//     }
+// })
 
-document.querySelector("#schedule-challenge").addEventListener("click", async (e) => {
+document.querySelector("#schedule-challenge")?.addEventListener("click", async (e) => {
     e.preventDefault();
     
     let challenge_name = document.querySelector("#challenge-name").value
@@ -85,7 +85,7 @@ document.querySelector("#schedule-challenge").addEventListener("click", async (e
     }
 });
 
-document.querySelector("#stop-btn").addEventListener("click", async (e) => {
+document.querySelector("#stop-btn")?.addEventListener("click", async (e) => {
     const challenge_name = e.target.getAttribute("data-challengeid");
     let res = await fetch(`/api/${challenge_name}/destroy`, {
         method: "POST",
@@ -101,3 +101,71 @@ document.querySelector("#stop-btn").addEventListener("click", async (e) => {
         location.reload();
     }
 });
+
+function _arrayBufferToBase64( buffer ) {
+    var binary = '';
+    var bytes = new Uint8Array( buffer );
+    var len = bytes.byteLength;
+    for (var i = 0; i < len; i++) {
+        binary += String.fromCharCode( bytes[ i ] );
+    }
+    return window.btoa( binary );
+}
+
+
+function parseChallenge(ev) {
+    ev.preventDefault();
+    ev.target.style.opacity = 1
+    ev.target.style.display = "none";
+    let fileReader = new FileReader();
+
+    fileReader.readAsArrayBuffer(new Blob([ev.dataTransfer.files[0]], {
+        type: "application/tar+gzip"
+    }));
+    fileReader.onloadend = async () => {
+        let resp = await fetch("/api/challenge_untar", {
+            "method": "POST",
+            "headers": {
+                "content-type": "application/x-www-form-urlencoded"
+            },
+            "body": "data="+encodeURIComponent(_arrayBufferToBase64(fileReader.result))
+        });
+
+        resp = await resp.json()
+
+        if (resp.length > 0) {
+            document.querySelector(".upload-info").style.display = "block"
+            
+            localStorage.setItem("cached_upload", JSON.stringify(resp))
+            for (const entry of resp) {
+                document.querySelector(".upload-info").innerHTML += `
+                <div class="upload-entry"> 
+                    <h3 class="upload-filename">${entry.filename}</h3>
+                    <fieldset class="visibility-form">
+                        <input type="radio" id="public" value="public" name="visibility">
+                        <label for="public">public</label>
+                        <input type="radio" id="private" value="private" name="visibility">
+                        <label for="private">private</label>
+                    </fieldset>
+                </div>`;
+            }
+        }
+    }
+}
+
+function whenDragOver(ev) {
+    ev.target.style.opacity = 0.5;
+    ev.preventDefault();
+}
+
+function whenDragLeave(ev) {
+    ev.target.style.opacity = 1;
+    ev.preventDefault();
+}
+
+['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    document.querySelector("challenge-dragging")?.addEventListener(eventName, (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+    }, false)
+  })

@@ -33,11 +33,12 @@ pub struct PaginationQuery {
     path: Option<String>
 }
 
-// TODO: randomize this, store in env
-const SECRET_KEY: &str = "SUPER_FUCKING_SECURE";
+pub enum JwtSignError {
+    SignError
+}
 
-pub fn sign_jwt(user: UserInstance) -> String {
-    let key: Hmac<Sha256> = Hmac::new_from_slice(SECRET_KEY.as_bytes()).unwrap();
+pub fn sign_jwt(user: UserInstance) -> Result<String, JwtSignError> {
+    let key: Hmac<Sha256> = Hmac::new_from_slice(std::env::var("SECRET_KEY").expect("SECRET_KEY env var is not set").as_bytes()).unwrap();
     let mut claims = BTreeMap::new();
 
     let id = user.id.to_string();
@@ -51,11 +52,15 @@ pub fn sign_jwt(user: UserInstance) -> String {
     let jwt_failed = String::from("");
     let token_str = claims.sign_with_key(&key).unwrap_or(jwt_failed);
 
-    return token_str;
+    if token_str.len() == 0 {
+        return Err(JwtSignError::SignError);
+    }
+    
+    Ok(token_str)
 }
 
 pub fn get_jwt_claims (token: &str) -> Result<BTreeMap<String, String>, JWT_Error>{
-    let key: Hmac<Sha256> = Hmac::new_from_slice(SECRET_KEY.as_bytes())?;
+    let key: Hmac<Sha256> = Hmac::new_from_slice(std::env::var("SECRET_KEY").expect("SECRET_KEY env var is not set").as_bytes())?;
     let claims: BTreeMap<String, String> = token.verify_with_key(&key)?;
 
     Ok(claims)
@@ -354,10 +359,10 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                         }
                                         @for log in solve_logs {
                                             tr {
-                                                td { (log.id()) }
-                                                td { (log.challenge_name()) }
-                                                td { (log.username()) }
-                                                @match log.is_success() {
+                                                td { (log.id) }
+                                                td { (log.challenge_name) }
+                                                td { (log.username) }
+                                                @match log.is_success {
                                                     true => td class="success-submission" {
                                                         "Success"
                                                     },
@@ -366,7 +371,7 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                                     }
                                                 }
                                                 td { (log.time()) }
-                                                td { (log.submit_content()) }
+                                                td { (log.submit_content) }
                                             }
                                         }
                                     }
@@ -409,17 +414,24 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                 h1 id="section-title" { "Challenge upload" }
                                 div class="section-wrapper" {
                                     div class="form-wrapper" { 
-                                        form class="challenge-upload-form" method="post" enctype="multipart/form-data" {
-                                            input type="date" name="start-date" id="start-date" {}
-                                            input type="time" name="start-time" id="start-time" {}
-                                            input type="date" name="end-date" id="end-date" {}
-                                            input type="time" name="end-time" id="end-time" {}
-                                            input type="file" name="challenge-file" id="fileToUpload" accept=".tar.gz" {}
-                                            button id="upload-challenge" { 
-                                                span {
-                                                    "upload" 
-                                                } 
-                                            }
+                                        // form class="challenge-upload-form" method="post" enctype="multipart/form-data" {
+                                        //     input type="date" name="start-date" id="start-date" {}
+                                        //     input type="time" name="start-time" id="start-time" {}
+                                        //     input type="date" name="end-date" id="end-date" {}
+                                        //     input type="time" name="end-time" id="end-time" {}
+                                        //     input type="file" name="challenge-file" id="fileToUpload" accept=".tar.gz" {}
+                                        //     button id="upload-challenge" { 
+                                        //         span {
+                                        //             "upload" 
+                                        //         } 
+                                        //     }
+                                        // }
+                                        div class="challenge-dragging" ondrop="parseChallenge(event)" ondragover="whenDragOver(event)" ondragleave="whenDragLeave(event)" {
+                                            p { "Drag your challenge archive here" }
+                                        }
+
+                                        div class="upload-info" {
+                                            
                                         }
                                     }
                                 }

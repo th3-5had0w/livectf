@@ -4,6 +4,7 @@ use actix_web::{App, HttpServer, web};
 use database::user::UserInstance;
 use notifier::{Notifier, NotifierComms};
 use actix_files;
+use dotenv::dotenv;
 
 mod challenge_upload_handler;
 mod deployer;
@@ -17,6 +18,8 @@ mod utils;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+    dotenv().ok();
+
     let (slave_sender, listen_master): (Sender<(String, Vec<u8>)>, Receiver<(String, Vec<u8>)>) = mpsc::channel();
     let mut slaves = NotifierComms {
         comm_infos: Vec::new()
@@ -83,6 +86,7 @@ async fn webserver_loop(slaves: NotifierComms, db_conn: database::DbConnection) 
             .route("/api/challenge-upload", web::post().to(challenge_upload_handler::handle_challenge))
             .route("/submit/{flag}", web::post().to(flag_receiver::handle_submission))
             .route("/api/{challenge}/{action}", web::post().to(web_interface::challenge::api_challenge_action))
+            .route("/api/challenge_untar", web::post().to(web_interface::challenge::api_decompress_challenge))
             .default_service(
                 web::route().to(web_interface::not_found)
             )

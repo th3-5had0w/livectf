@@ -7,12 +7,12 @@ use crate::database::{DbConnection, DbError, DbFilter, DB_SOLVE_HISTORY_TABLE};
 
 #[derive(FromRow, Decode, serde::Deserialize, serde::Serialize)]
 pub struct SolveHistoryEntry {
-    id: i32,
-    challenge_name: String,
-    username: String,
-    is_success: bool,
-    time: i64,
-    submit_content: String
+    pub id: i32,
+    pub challenge_name: String,
+    pub username: String,
+    pub is_success: bool,
+    pub time: i64,
+    pub submit_content: String
 }
 
 impl SolveHistoryEntry {
@@ -26,33 +26,10 @@ impl SolveHistoryEntry {
             time: chrono::offset::Utc::now().timestamp()
         }
     }
-    pub fn id(&self) -> i32 {
-        self.id
-    }
-
-    pub fn username(&self) -> &str {
-        self.username.as_str()
-    }
-
-    pub fn is_success(&self) -> bool {
-        self.is_success
-    }
 
     #[allow(dead_code)]
     pub fn time(&self) -> DateTime<Utc> {
         DateTime::from_timestamp(self.time as i64, 0).unwrap_or(DateTime::from_timestamp(0, 0).unwrap())
-    }
-
-    pub fn raw_time(&self) -> i64 {
-        self.time
-    }
-
-    pub fn submit_content(&self) -> &str {
-        self.submit_content.as_str()
-    }
-
-    pub fn challenge_name(&self) -> &str {
-        &self.challenge_name
     }
 
     pub fn get_empty_solve_history_entry() -> Self {
@@ -90,11 +67,11 @@ pub async fn db_save_solve_result(db_connection: &DbConnection, solve_entry: Sol
         );", table_name=DB_SOLVE_HISTORY_TABLE);
 
         let result: PgQueryResult = sqlx::query(&query[..])
-        .bind(solve_entry.username())
-        .bind(solve_entry.challenge_name())
-        .bind(solve_entry.is_success())
-        .bind(solve_entry.raw_time())
-        .bind(solve_entry.submit_content())
+        .bind(solve_entry.username)
+        .bind(solve_entry.challenge_name)
+        .bind(solve_entry.is_success)
+        .bind(solve_entry.time)
+        .bind(solve_entry.submit_content)
         .execute(&db_connection.pool).await.unwrap_or(PgQueryResult::default());
 
     if result.rows_affected() > 0 {
@@ -140,18 +117,18 @@ pub async fn db_filter_for_solve_history(
             match name {
                 "id" => {
                     filter_statement.push_str(
-                        (format!("id{}", op) + format!("{}", &filter.filter_instance().id()).as_str()).as_str()
+                        (format!("id{}", op) + format!("{}", &filter.filter_instance().id).as_str()).as_str()
                     )
                 },
                 "challenge_name" => {
-                    let challenge_name = &filter.filter_instance().challenge_name();
+                    let challenge_name = &filter.filter_instance().challenge_name;
 
                     filter_statement.push_str(
                         format!("challenge_name LIKE '{}'", challenge_name.replace("\'", "\\'")).as_str()
                     )
                 },
                 "username" => { 
-                    let username = &filter.filter_instance().username();
+                    let username = &filter.filter_instance().username;
 
                     filter_statement.push_str(
                         format!("username LIKE '{}'", username.replace("\'", "\\'")).as_str()
@@ -159,12 +136,12 @@ pub async fn db_filter_for_solve_history(
                 },
                 "is_success" => {
                     filter_statement.push_str(
-                        format!("is_success={}", &filter.filter_instance().is_success()).as_str()
+                        format!("is_success={}", &filter.filter_instance().is_success).as_str()
                     )
                 },
                 "time" => {
                     filter_statement.push_str(
-                        (format!("time{}", op) + &format!("{}", &filter.filter_instance().raw_time()).as_str()).as_str()
+                        (format!("time{}", op) + &format!("{}", &filter.filter_instance().time).as_str()).as_str()
                     )
                 },
                 _ => ()

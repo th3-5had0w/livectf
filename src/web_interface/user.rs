@@ -1,3 +1,5 @@
+use actix_web::cookie::time::OffsetDateTime;
+use actix_web::http::header;
 use regex::Regex;
 use std::collections::BTreeMap;
 
@@ -22,10 +24,18 @@ pub async fn api_user_login(db_conn: web::Data<DbConnection>, form: web::Form<Lo
     if form.username.len() == 0 || form.password.len() == 0 {
         return Ok(get_error("Missing username/password"));
     } 
-        
+
+    let username = form.username.as_str();
+    let password = form.password.as_str();
+    
+    if password.len() < 6 {
+        return Ok(get_error("Password too short"))
+    }
+
+
     let mut user = db_conn.user_login(
-        form.username.as_str(),
-        form.password.as_str()
+        username,
+        password
     ).await;
     
     if user.id == -1 {
@@ -42,11 +52,25 @@ pub async fn api_user_login(db_conn: web::Data<DbConnection>, form: web::Form<Lo
         }
     }
 
-    let json_resp = JsonResponse {is_error: false, message: sign_jwt(user)};
-    let json_resp = serde_json::to_string(&json_resp).unwrap();
-    let resp = HttpResponse::Ok()
+    let jwt: String = sign_jwt(user).unwrap_or(String::new());
+
+    if jwt.len() == 0 {
+        return Ok(get_error("Cannot sign JWT"));
+    }
+
+    let c = Cookie::build("token", "jfpzihnfiobjgnopka")
+        // .domain("localhost")
+        .path("/")
+        .http_only(true)
+        .expires(OffsetDateTime::now_utc())
+        .finish();
+
+
+    let resp = HttpResponse::PermanentRedirect()
         .content_type(ContentType::json())
-        .body(json_resp);
+        .cookie(c)
+        .append_header((header::LOCATION, "/"))
+        .finish();
     
     return Ok(resp);
 }

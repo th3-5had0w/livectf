@@ -16,7 +16,7 @@ struct Challenge {
 }
 
 #[derive(Debug)]
-enum Error {
+pub enum Error {
     Build(String),
     Unpack(String),
     GenerateFlag(String),

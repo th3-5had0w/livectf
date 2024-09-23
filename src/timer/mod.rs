@@ -166,11 +166,11 @@ fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<(String, 
 }
 
 fn cmd_deploy_info(_ctx: &mut TimerCtx, timer_queue_guard: Arc<Mutex<TimerQueue>>, data: &HashMap<&str, String>) {
-    let mut timer_queue = timer_queue_guard.lock().expect("failed acquiring lock");
-    let challenge_name = data.get("challenge_name").expect("missing challenge_name");
-    let deploy_status = data.get("deploy_status").expect("missing deploy_status");
+    // let mut timer_queue = timer_queue_guard.lock().expect("failed acquiring lock");
+    // let challenge_name = data.get("challenge_name").expect("missing challenge_name");
+    // let deploy_status = data.get("deploy_status").expect("missing deploy_status");
 
-    if deploy_status == "fail" {
-        timer_queue.deployed_queue.retain(|deployed_challenge| &deployed_challenge.0 != challenge_name);
-    }
+    // if deploy_status == "fail" {
+    //     timer_queue.deployed_queue.retain(|deployed_challenge| &deployed_challenge.0 != challenge_name);
+    // }
 }

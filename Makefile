@@ -2,7 +2,7 @@ all:
 	cargo build --release
 	cp -r src/web_interface/static ./RELEASE
 	cp ./target/release/livectf ./RELEASE
-
+	cp .env ./RELEASE
 dev:
 	cargo build --release
 	cp -r src/web_interface/static ./RELEASE
