@@ -1,5 +1,5 @@
 use core::time;
-use std::{collections::{BinaryHeap, HashMap}, fmt::Display, str::FromStr, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread::{sleep, spawn}, time::{SystemTime, UNIX_EPOCH}};
+use std::{collections::HashMap, fmt::Display, str::FromStr, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread::{sleep, spawn}, time::{SystemTime, UNIX_EPOCH}};
 
 // use uuid::Uuid;
 
@@ -149,8 +149,12 @@ fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<(String, 
 
             } else if !scheduled_challenge.is_running && now >= scheduled_challenge.public_time {
                 scheduled_challenge.is_running = true;
+                let target_module = String::from("deployer");
+                let data = craft_type_notify_message(&target_module, &["public", &scheduled_challenge.challenge_name]);
+                sender.send((target_module, data)).expect("deployer cannot send");
                 
             } else if !scheduled_challenge.is_announced && now >= scheduled_challenge.public_time - scheduled_challenge.pre_announce {
+                todo!("announce");
                 scheduled_challenge.is_announced = true;
             }
         }
