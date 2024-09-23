@@ -232,7 +232,7 @@ fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<()
 
     ctx.sender.send((target_module, data)).expect("deployer cannot send");
 
-    ctx.running_deployments.retain(|challenge| &challenge.challenge_filename != &challenge_filename);
+    ctx.running_deployments.retain(|challenge| challenge.challenge_filename != challenge_filename);
     rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), false));
     Ok(())
 }
