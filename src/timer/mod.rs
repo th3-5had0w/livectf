@@ -1,43 +1,36 @@
 use core::time;
-use std::{collections::{BinaryHeap, HashMap}, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread::{sleep, spawn}, time::{SystemTime, UNIX_EPOCH}};
+use std::{collections::{BinaryHeap, HashMap}, fmt::Display, str::FromStr, sync::{mpsc::{self, Receiver, Sender}, Arc, Mutex}, thread::{sleep, spawn}, time::{SystemTime, UNIX_EPOCH}};
 
 // use uuid::Uuid;
 
 use crate::notifier::{craft_type_notify_message, Notifier, NotifierCommInfo};
 
-#[derive(PartialEq, Eq)]
-struct ScheduledChallenge(String, i128);
+#[derive(Debug)]
+enum Error {
+    Enqueue(String),
+}
 
-#[derive(PartialEq, Eq)]
-struct DeployedChallenge(String, i128);
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::Enqueue(err) => write!(f, "Timer - EnqueueFail: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+struct ScheduledChallenge {
+    challenge_name: String,
+    public_time: i128,
+    interval: i128,
+    pre_announce: i128,
+    is_announced: bool,
+    is_running: bool,
+}
 
 struct TimerQueue {
-    scheduled_queue: BinaryHeap<ScheduledChallenge>,
-    deployed_queue: BinaryHeap<DeployedChallenge>
-}
-
-impl Ord for ScheduledChallenge {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.1.cmp(&self.1)
-    }
-}
-
-impl PartialOrd for ScheduledChallenge {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for DeployedChallenge {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.1.cmp(&self.1)
-    }
-}
-
-impl PartialOrd for DeployedChallenge {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
+    scheduled_challenge_queue: Vec<ScheduledChallenge>
 }
 
 struct TimerCtx {
@@ -66,7 +59,7 @@ pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>
 }
 
 fn timer_loop(mut ctx: TimerCtx) {
-    let timer_queue: Arc<Mutex<TimerQueue>> = Arc::new(Mutex::new(TimerQueue { scheduled_queue: BinaryHeap::new(), deployed_queue: BinaryHeap::new() }));
+    let timer_queue: Arc<Mutex<TimerQueue>> = Arc::new(Mutex::new(TimerQueue { scheduled_challenge_queue: Vec::new() }));
     let timer_queue_clone = Arc::clone(&timer_queue);
     let countdown_sender = ctx.sender.clone();
     spawn(move || {
@@ -77,7 +70,9 @@ fn timer_loop(mut ctx: TimerCtx) {
         let data = deserialize_data(&serialized_data);
         match data.get("cmd").expect("missing cmd").as_str() {
 
-            "enqueue" => cmd_enqueue(&mut ctx, timer_queue.clone(), &data),
+            "enqueue" => if let Err(err) = cmd_enqueue(&mut ctx, timer_queue.clone(), &data) {
+                !todo!("handle it")
+            },
 
             "deploy_info" => cmd_deploy_info(&mut ctx, timer_queue.clone(), &data),
 
@@ -91,17 +86,48 @@ fn deserialize_data(serialized_data: &Vec<u8>) -> HashMap<&str, String> {
     return data;
 }
 
-fn cmd_enqueue(_ctx: &mut TimerCtx, timer_queue_guard: Arc<Mutex<TimerQueue>>, data: &HashMap<&str, String>) {
+fn cmd_enqueue(_ctx: &mut TimerCtx, timer_queue_guard: Arc<Mutex<TimerQueue>>, data: &HashMap<&str, String>) -> Result<(), Error>{
     let mut timer_queue = timer_queue_guard.lock().expect("failed acquiring lock");
-    let challenge_name = data.get("challenge_name").expect("missing challenge_name");
-    let start_time = i128::from_str_radix(
-        data.get("start_time").expect("missing start_time"),
-        10).expect("invalid start_time");
-    let end_time = i128::from_str_radix(
-                            data.get("end_time").expect("missing end_time"),
-                            10).expect("invalid end_time");
-    timer_queue.scheduled_queue.push(ScheduledChallenge(challenge_name.to_string(), start_time));
-    timer_queue.deployed_queue.push(DeployedChallenge(challenge_name.to_string(), end_time));
+    let challenge_name = data.get("challenge_name")
+                                            .ok_or(Error::Enqueue(
+                                                String::from_str("missing challenge name").unwrap()
+                                            ))?.to_owned();
+
+    let public_time = i128::from_str_radix(
+        data.get("public_time")
+                .ok_or(Error::Enqueue(
+                    String::from_str("missing public time").unwrap()
+                ))?.to_owned().as_str(),
+                10
+    ).map_err(|e| Error::Enqueue(format!("{}", e)))?;
+
+    let interval = i128::from_str_radix(
+        data.get("interval")
+                .ok_or(Error::Enqueue(
+                    String::from_str("missing interval").unwrap()
+                ))?.to_owned().as_str(),
+                10
+    ).map_err(|e| Error::Enqueue(format!("{}", e)))?;
+
+    let pre_announce = i128::from_str_radix(
+        data.get("pre_announce")
+                .ok_or(Error::Enqueue(
+                    String::from_str("missing pre-announce time").unwrap()
+                ))?.to_owned().as_str(),
+                10
+    ).map_err(|e| Error::Enqueue(format!("{}", e)))?;
+
+    timer_queue.scheduled_challenge_queue.push(
+        ScheduledChallenge { 
+            challenge_name,
+            public_time,
+            interval,
+            pre_announce,
+            is_announced: false,
+            is_running: false
+        }
+    );
+    Ok(())
 }
 
 fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<(String, Vec<u8>)>) {
@@ -110,39 +136,27 @@ fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<(String, 
         sleep(time::Duration::from_secs(1));
         let mut timer_queue = timer_queue_guard.lock().expect("failed acquiring lock");
 
-        let now_epoch = i128::try_from(
-            SystemTime::now().duration_since(UNIX_EPOCH).expect("back to the future!!!").as_secs()
-        ).expect("Cannot convert current epoch to i128");
+        let mut timeout: Option<String> = None;
 
-        if timer_queue.scheduled_queue.len() != 0 {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).expect("back to the future!!!").as_secs() as i128;
 
-            let challenge_start_time = timer_queue.scheduled_queue.peek().expect("failed peeking timer queue").1;
-
-            if now_epoch >= challenge_start_time {
-
-                let challenge_name = &timer_queue.scheduled_queue.peek().expect("failed peeking timer queue").0;
+        for scheduled_challenge in &mut timer_queue.scheduled_challenge_queue {
+            if now >= scheduled_challenge.public_time + scheduled_challenge.interval {
+                timeout = Some(scheduled_challenge.challenge_name.clone());
                 let target_module = String::from("deployer");
-                let data = craft_type_notify_message(&target_module, &["deploy", challenge_name]);
+                let data = craft_type_notify_message(&target_module, &["destroy", &scheduled_challenge.challenge_name]);
                 sender.send((target_module, data)).expect("deployer cannot send");
-                timer_queue.scheduled_queue.pop();
+
+            } else if !scheduled_challenge.is_running && now >= scheduled_challenge.public_time {
+                scheduled_challenge.is_running = true;
                 
-            } else if now_epoch < challenge_start_time {
-                // TODO:
-                // Make announce through telgram bot or discord bot or sth!!!!!
+            } else if !scheduled_challenge.is_announced && now >= scheduled_challenge.public_time - scheduled_challenge.pre_announce {
+                scheduled_challenge.is_announced = true;
             }
         }
 
-        if timer_queue.deployed_queue.len() != 0 {
-
-            let challenge_end_time = timer_queue.deployed_queue.peek().expect("failed peeking timer queue").1;
-            if now_epoch >= challenge_end_time {
-
-                let target_module = String::from("deployer");
-                let data = craft_type_notify_message(&target_module, &["destroy", &timer_queue.deployed_queue.peek().expect("failed peeking timer queue").0]);
-                sender.send((target_module, data)).expect("deployer cannot send");
-                timer_queue.deployed_queue.pop();
-
-            }
+        if let Some(challenge_name) = timeout {
+            timer_queue.scheduled_challenge_queue.retain(|challenge| challenge.challenge_name != challenge_name);
         }
     }
 }
