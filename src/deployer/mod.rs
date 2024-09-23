@@ -11,7 +11,8 @@ struct Challenge {
     challenge_filename: String,
     challenge_image: String,
     container_id: String,
-    port: u16
+    port: u16,
+    running: bool
 }
 
 #[derive(Debug)]
@@ -22,6 +23,7 @@ enum Error {
     Deploy(String),
     Destroy(String),
     Firewall(String),
+    PublicChallenge(String)
 }
 
 impl Display for Error {
@@ -32,7 +34,8 @@ impl Display for Error {
             Error::GenerateFlag(err) => write!(f, "Deployer - GenerateFlagFail: {}", err),
             Error::Deploy(err) => write!(f, "Deployer - DeployFail: {}", err),
             Error::Destroy(err) => write!(f, "Deployer - DestroyFail: {}", err),
-            Error::Firewall(err) => write!(f, "Deployer - FirewallConfigFail: {}", err)
+            Error::Firewall(err) => write!(f, "Deployer - FirewallConfigFail: {}", err),
+            Error::PublicChallenge(err) => write!(f, "Deployer - PublicChallengeFail: {}", err)
         }
     }
 }
@@ -93,6 +96,9 @@ fn deployer_loop(mut ctx: DeployerCtx) {
             "destroy" => if let Err(err) = cmd_destroy(&mut ctx, &data) {
                 todo!("handle!")
             },
+            "public" => if let Err(err) = cmd_public(&mut ctx, &data) {
+                todo!("handle!")
+            }
             _ => panic!("unknown cmd")
         }
     }
@@ -140,7 +146,6 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(),
     let conn_string = format!("nc localhost {}", port);
     rt.block_on(ctx.db_conn.set_challenge_connection_string(challenge_filename.to_string(), conn_string));
     rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), true));
-    set_port_access(PortAccess::Add(port))?;
 
     {
         let target_module = String::from("timer");
@@ -153,7 +158,8 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(),
             challenge_filename,
             challenge_image,
             container_id,
-            port
+            port,
+            running: false
         }
     );
 
@@ -214,7 +220,9 @@ fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<()
 
     let challenge = challenge.unwrap();
     
-    set_port_access(PortAccess::Remove(challenge.port))?;
+    if challenge.running {
+        set_port_access(PortAccess::Remove(challenge.port))?;
+    }
 
     let rt = Runtime::new().expect("failed creating tokio runtime");
     destroy_challenge(challenge)?;
@@ -317,6 +325,23 @@ fn deploy_challenge(challenge_filename: &String, challenge_image: &String, port:
                                                             .map_err(|e| Error::Deploy(format!("{}", e)))?;
 
     Ok(container_id)
+}
+
+fn cmd_public(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+
+    let challenge_name = data.get("challenge_filename")
+                                        .ok_or(Error::PublicChallenge(
+                                            String::from_str("invalid challenge filename").unwrap()
+                                        ))?.to_owned();
+
+
+    for challenge in &mut ctx.running_deployments {
+        if challenge.challenge_filename == challenge_name && !challenge.running {
+            set_port_access(PortAccess::Add(challenge.port))?;
+            challenge.running = true;
+        }
+    }
+    Ok(())
 }
 
 fn generate_challenge_flag(challenge_filename: &String) -> Result<String, Error> {
