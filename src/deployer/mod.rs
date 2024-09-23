@@ -57,28 +57,6 @@ impl DeployerCtx {
         }
         return false;
     }
-
-    fn set_challenge_port(&mut self, challenge_filename: &String, port: u16) {
-        let mut exist: bool = false;
-        for challenge in self.running_deployments.iter_mut() {
-            if challenge.challenge_filename == challenge_filename.to_string() {
-                challenge.port = port;
-                exist = true;
-            }
-        }
-
-        if !exist { panic!("something went wrong! must not reach here!") };
-    }
-
-    fn get_challenge(&mut self, challenge_filename: &String) -> Challenge {
-        for challenge in self.running_deployments.clone() {
-            if challenge.challenge_filename == challenge_filename.to_string() {
-                return challenge;
-            }
-        }
-
-        panic!("something went wrong! must not reach here!")
-    }
 }
 
 pub fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>, db_conn: DbConnection) {
@@ -215,20 +193,56 @@ fn set_port_access(status: PortAccess) -> Result<(), Error> {
 
 fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
 
-    let challenge_filename = data.get("challenge_filename").expect("missing challenge_filename");
+    let challenge_filename = data.get("challenge_filename")
+                                        .ok_or(Error::Deploy(
+                                            String::from_str("invalid challenge filename").unwrap()
+                                        ))?.to_owned();
+
+    let challenge = |challenge_name| -> Option<&Challenge> {
+        for challenge in &ctx.running_deployments {
+            if challenge_name == &challenge.challenge_filename {
+                return Some(challenge)
+            }
+        }
+        None
+    }(&challenge_filename);
+    if challenge.is_none() {
+        return Err(Error::Destroy(
+            format!("invalid challenge {}", &challenge_filename)
+        ));
+    }
+
+    let challenge = challenge.unwrap();
+    
+    set_port_access(PortAccess::Remove(challenge.port))?;
+
     let rt = Runtime::new().expect("failed creating tokio runtime");
-    destroy_challenge(challenge_filename)?;
+    destroy_challenge(challenge)?;
+
     let target_module = String::from_str("flag_receiver").unwrap();
-    let data = notifier::craft_type_notify_message(&target_module, &["cleanup", challenge_filename]);
+    let data = notifier::craft_type_notify_message(&target_module, &["cleanup", &challenge_filename]);
+
     ctx.sender.send((target_module, data)).expect("deployer cannot send");
-    ctx.running_deployments.retain(|challenge| &challenge.challenge_filename != challenge_filename);
+
+    ctx.running_deployments.retain(|challenge| &challenge.challenge_filename != &challenge_filename);
     rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), false));
     Ok(())
 }
 
-fn destroy_challenge(challenge_filename: &String) -> Result<(), Error> {
+fn destroy_challenge(challenge: &Challenge) -> Result<(), Error> {
     let output = Command::new("docker")
-                                .args(["rm", "-f", challenge_filename])
+                                .args(["container", "rm", "-f", &challenge.container_id])
+                                .output()
+                                .expect("failed running bash shell");
+
+    if !output.status.success() {
+        return Err(Error::Destroy(
+            String::from_utf8(output.stderr).unwrap()
+        ))
+    }
+
+    let output = Command::new("docker")
+                                .args(["image", "rm", "-f", &challenge.challenge_image])
                                 .output()
                                 .expect("failed running bash shell");
 
