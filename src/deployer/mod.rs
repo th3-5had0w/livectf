@@ -108,17 +108,17 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(),
 
     let challenge_filename = data.get("challenge_filename")
                                                 .ok_or(Error::Deploy(
-                                                    String::from_str("invalid challenge filename").unwrap()
+                                                    String::from("invalid challenge filename")
                                                 ))?.to_owned();
 
     let start_time = data.get("start_time")
                                                 .ok_or(Error::Deploy(
-                                                    String::from_str("invalid start time").unwrap()
+                                                    String::from("invalid start time")
                                                 ))?;
 
     let interval = data.get("interval")
                                                 .ok_or(Error::Deploy(
-                                                    String::from_str("invalid interval").unwrap()
+                                                    String::from("invalid interval")
                                                 ))?;
 
     unpack_challenge(&challenge_filename)?;
@@ -139,8 +139,8 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(),
     }
 
     let container_id = deploy_challenge(&challenge_filename, &challenge_image, port)?;
-    let target_module = String::from_str("flag_receiver").unwrap();
-    let cmd = String::from_str("flag_info").unwrap();
+    let target_module = String::from("flag_receiver");
+    let cmd = String::from("flag_info");
     let data = notifier::craft_type_notify_message(&target_module, &[&cmd, &challenge_filename.to_string(), &flag]);
     ctx.sender.send((target_module, data)).expect("deployer cannot send");
     let conn_string = format!("nc localhost {}", port);
@@ -201,7 +201,7 @@ fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<()
 
     let challenge_filename = data.get("challenge_filename")
                                         .ok_or(Error::Deploy(
-                                            String::from_str("invalid challenge filename").unwrap()
+                                            String::from("invalid challenge filename")
                                         ))?.to_owned();
 
     let challenge = |challenge_name| -> Option<&Challenge> {
@@ -227,7 +227,7 @@ fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<()
     let rt = Runtime::new().expect("failed creating tokio runtime");
     destroy_challenge(challenge)?;
 
-    let target_module = String::from_str("flag_receiver").unwrap();
+    let target_module = String::from("flag_receiver");
     let data = notifier::craft_type_notify_message(&target_module, &["cleanup", &challenge_filename]);
 
     ctx.sender.send((target_module, data)).expect("deployer cannot send");
@@ -331,7 +331,7 @@ fn cmd_public(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(),
 
     let challenge_name = data.get("challenge_filename")
                                         .ok_or(Error::PublicChallenge(
-                                            String::from_str("invalid challenge filename").unwrap()
+                                            String::from("invalid challenge filename")
                                         ))?.to_owned();
 
 
