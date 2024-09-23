@@ -183,3 +183,4 @@ pub fn unpack(challenge_filename: &String, dest: &str) -> Result<(), Error> {
 
     Ok(())
 }
+
