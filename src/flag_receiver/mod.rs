@@ -1,4 +1,4 @@
-use std::{collections::HashMap, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn, collections::BTreeMap};
+use std::{collections::{BTreeMap, HashMap}, fmt::Display, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
 
 use actix_web::{web, HttpResponse, HttpRequest, cookie::Cookie};
 use tokio::runtime::Runtime;
@@ -8,12 +8,36 @@ use crate::{notifier::{craft_type_notify_message, NotifierCommInfo, NotifierComm
 use crate::database::{solve_history::SolveHistoryEntry, DbConnection};
 use crate::web_interface::{get_jwt_claims, forbiden};
 
+#[derive(Debug)]
+enum Error {
+    FlagInfo(String),
+    CleanUp(String),
+    FlagSubmit(String)
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::FlagInfo(err) => write!(f, "FlagReceiver - FlagInfoFail: {}", err),
+            Error::CleanUp(err) => write!(f, "FlagReceiver - CleanUpFail: {}", err),
+            Error::FlagSubmit(err) => write!(f, "FlagReceiver - FlagSubmitFail: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+struct ChallengeInfo {
+    challenge_name: String,
+    challenge_flag: String
+}
+
 struct FlagReceiverCtx {
     // main comm channel
     sender: Sender<(String, Vec<u8>)>,
     listener: Receiver<Vec<u8>>,
 
-    challenge_infos: HashMap<String, String>,
+    challenge_infos: Vec<ChallengeInfo>,
     db_conn: DbConnection
 }
 
@@ -22,7 +46,7 @@ pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>
     let ctx = FlagReceiverCtx {
         sender: my_sender,
         listener: my_receiver,
-        challenge_infos: HashMap::new(),
+        challenge_infos: Vec::new(),
         db_conn
     };
 
@@ -47,11 +71,17 @@ fn flag_receiver_loop(mut ctx: FlagReceiverCtx) {
         let data = deserialize_data(&serialized_data);
         match data.get("cmd").expect("missing cmd").as_str() {
 
-            "flag_info" => cmd_flag_info(&mut ctx, &data),
+            "flag_info" => if let Err(err) = cmd_flag_info(&mut ctx, &data) {
+                todo!("handle!")
+            },
 
-            "flag_submit" => cmd_flag_submit(&mut ctx, &data),
+            "flag_submit" => if let Err(err) = cmd_flag_submit(&mut ctx, &data) {
+                todo!("handle!")
+            },
 
-            "cleanup" => cmd_cleanup(&mut ctx, &data),
+            "cleanup" => if let Err(err) = cmd_cleanup(&mut ctx, &data) {
+                todo!("handle!")
+            },
 
             _ => panic!("unknown cmd")
         };
@@ -83,35 +113,58 @@ pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path
     return Ok(HttpResponse::Ok().body(format!("flag submitted successfully")));
 }
 
-fn cmd_flag_info(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
-    let challenge_name = data.get("challenge_name").expect("missing challenge_name").to_string();
-    let flag = data.get("flag").expect("missing flag").to_string();
-    ctx.challenge_infos.insert(challenge_name, flag);
+fn cmd_flag_info(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+
+    let challenge_name = data.get("challenge_name")
+                                            .ok_or(Error::FlagInfo(
+                                                String::from("missing challenge name")
+                                            ))?.to_owned();
+
+    let challenge_flag = data.get("flag")
+                                    .ok_or(Error::FlagInfo(
+                                        String::from("missing challenge flag")
+                                    ))?.to_owned();
+
+    ctx.challenge_infos.push(
+        ChallengeInfo { 
+            challenge_name,
+            challenge_flag 
+        }
+    );
+    Ok(())
 }
 
-fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
-    let submitted_flag = data.get("flag").expect("missing flag").to_string();
-    let username = data.get("submit_by").expect("missing username").to_string();
+fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+    let submitted_flag = data.get("flag")
+                                    .ok_or(Error::FlagSubmit(
+                                        String::from("missing flag")
+                                    ))?.to_owned();
+
+
+    let username = data.get("submit_by")
+                            .ok_or(Error::FlagSubmit(
+                                String::from("missing username")
+                            ))?.to_owned();
+
     let rt = Runtime::new().expect("failed creating tokio runtime");
 
-    for (challenge_name, flag) in &ctx.challenge_infos {
-        // TODO: add score to user and decay challenge's score
-        if &submitted_flag == flag {
+    for challenge in &ctx.challenge_infos {
+        if submitted_flag == challenge.challenge_flag {
             let solve_history = SolveHistoryEntry::new(
                 username.clone(),
-                challenge_name.clone(),
+                challenge.challenge_name.clone(),
                 true,
                 submitted_flag
             );
             
             rt.block_on(ctx.db_conn.user_add_score(
                 username, 
-                challenge_name.clone()
+                challenge.challenge_name.clone()
                 )
             );
             
             rt.block_on(ctx.db_conn.log_solve_result(solve_history));    
-            return;
+            return Ok(());
         }
     }
 
@@ -123,9 +176,20 @@ fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
     );
 
     rt.block_on(ctx.db_conn.log_solve_result(solve_history));
+
+    Ok(())
 }
 
-fn cmd_cleanup(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) {
-    let challenge_name = data.get("challenge_name").expect("missing challenge_name").to_string();
-    ctx.challenge_infos.remove(&challenge_name).expect(&format!("no challenge to cleanup: {}", challenge_name));
+fn cmd_cleanup(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+
+    let challenge_name = data.get("challenge_name")
+                                    .ok_or(Error::CleanUp(
+                                        String::from("missing challenge name")
+                                    ))?.to_owned();
+
+    ctx.challenge_infos.retain(|challenge| {
+        challenge.challenge_name != challenge_name
+    });
+
+    Ok(())
 }
