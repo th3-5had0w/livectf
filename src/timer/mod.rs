@@ -3,7 +3,7 @@ use std::{collections::HashMap, fmt::Display, str::FromStr, sync::{mpsc::{self, 
 
 // use uuid::Uuid;
 
-use crate::notifier::{craft_type_notify_message, Notifier, NotifierCommInfo};
+use crate::notifier::{CtrlMsg, DestroyCmdArgs, Notifier, NotifierCommInfo, PublicCmdArgs};
 
 #[derive(Debug)]
 enum Error {
@@ -35,11 +35,11 @@ struct TimerQueue {
 
 struct TimerCtx {
     // main comm channel
-    sender: Sender<(String, Vec<u8>)>,
+    sender: Sender<CtrlMsg>,
     listener: Receiver<Vec<u8>>,
 }
 
-pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>) {
+pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<CtrlMsg>) {
     let (notifier_sender, my_receiver) : (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
     
     let ctx = TimerCtx {
@@ -130,7 +130,7 @@ fn cmd_enqueue(_ctx: &mut TimerCtx, timer_queue_guard: Arc<Mutex<TimerQueue>>, d
     Ok(())
 }
 
-fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<(String, Vec<u8>)>) {
+fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<CtrlMsg>) {
 
     loop {
         sleep(time::Duration::from_secs(1));
@@ -143,15 +143,25 @@ fn countdown(timer_queue_guard: Arc<Mutex<TimerQueue>>, sender: Sender<(String, 
         for scheduled_challenge in &mut timer_queue.scheduled_challenge_queue {
             if now >= scheduled_challenge.public_time + scheduled_challenge.interval {
                 timeout = Some(scheduled_challenge.challenge_name.clone());
-                let target_module = String::from("deployer");
-                let data = craft_type_notify_message(&target_module, &["destroy", &scheduled_challenge.challenge_name]);
-                sender.send((target_module, data)).expect("deployer cannot send");
+                let msg = CtrlMsg::Deployer(
+                    crate::notifier::DeployerCommand::DestroyCmd(
+                        DestroyCmdArgs {
+                            challenge_name: scheduled_challenge.challenge_name.clone()
+                        }
+                    )
+                );
+                sender.send(msg).expect("deployer cannot send");
 
             } else if !scheduled_challenge.is_running && now >= scheduled_challenge.public_time {
                 scheduled_challenge.is_running = true;
-                let target_module = String::from("deployer");
-                let data = craft_type_notify_message(&target_module, &["public", &scheduled_challenge.challenge_name]);
-                sender.send((target_module, data)).expect("deployer cannot send");
+                let msg = CtrlMsg::Deployer(
+                    crate::notifier::DeployerCommand::PublicCmd(
+                        PublicCmdArgs {
+                            challenge_name: scheduled_challenge.challenge_name.clone()
+                        }
+                    )
+                );
+                sender.send(msg).expect("deployer cannot send");
                 
             } else if !scheduled_challenge.is_announced && now >= scheduled_challenge.public_time - scheduled_challenge.pre_announce {
                 todo!("announce");

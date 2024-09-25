@@ -7,7 +7,7 @@ use std::io::Write;
 use std::fs::{File, copy};
 use std::collections::BTreeMap;
 
-use crate::notifier::{craft_type_notify_message, Notifier, NotifierCommInfo, NotifierComms};
+use crate::notifier::{CtrlMsg, DeployCmdArgs, Notifier, NotifierCommInfo, NotifierComms};
 use crate::database::{challenge, DbConnection};
 use crate::utils::{is_time_schedule_valid, MAGIC_TIME};
 use crate::web_interface::{get_error, success, get_jwt_claims, forbiden, unauthorized};
@@ -18,7 +18,7 @@ use crate::web_interface::{get_error, success, get_jwt_claims, forbiden, unautho
 //     db_conn: DbConnection
 // }
 
-pub(crate) fn init(notifier: &mut Notifier, _my_sender: Sender<(String, Vec<u8>)>, _db_conn: DbConnection) {
+pub(crate) fn init(notifier: &mut Notifier, _my_sender: Sender<CtrlMsg>, _db_conn: DbConnection) {
     let (notifier_sender, _my_receiver) : (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
     // let ctx = ChallengeUploadHandlerCtx {
     //     sender: my_sender,
@@ -86,9 +86,15 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, db_conn: 
                 f.write_all(&data).unwrap();
             }
 
-            let target_module = String::from("deployer");
-            let data = craft_type_notify_message(&target_module, &["schedule", &filename.to_string(), &start_time.to_string(), &end_time.to_string()]);
-            slaves.notify(target_module, data);
+            let msg = CtrlMsg::Deployer(
+                crate::notifier::DeployerCommand::DeployCmd(DeployCmdArgs {
+                    challenge_name: filename.to_string(),
+                    start_time,
+                    interval: end_time,
+                    pre_announce: todo!("handle this!")
+                })
+            );
+            slaves.notify(msg);
 
             let chall = challenge::ChallengeData {
                 id: 0,

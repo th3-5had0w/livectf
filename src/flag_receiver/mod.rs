@@ -1,10 +1,10 @@
-use std::{collections::{BTreeMap, HashMap}, fmt::Display, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
+use std::{collections::{BTreeMap, HashMap}, fmt::Display, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
 
 use actix_web::{web, HttpResponse, HttpRequest, cookie::Cookie};
 use tokio::runtime::Runtime;
 // use uuid::Uuid;
 
-use crate::{notifier::{craft_type_notify_message, NotifierCommInfo, NotifierComms}, Notifier};
+use crate::{notifier::{CleanUpCmdArgs, CtrlMsg, FlagInfoCmdArgs, FlagReceiverCommand, FlagSubmitCmdArgs, NotifierCommInfo, NotifierComms}, Notifier};
 use crate::database::{solve_history::SolveHistoryEntry, DbConnection};
 use crate::web_interface::{get_jwt_claims, forbiden};
 
@@ -34,14 +34,14 @@ struct ChallengeInfo {
 
 struct FlagReceiverCtx {
     // main comm channel
-    sender: Sender<(String, Vec<u8>)>,
+    sender: Sender<CtrlMsg>,
     listener: Receiver<Vec<u8>>,
 
     challenge_infos: Vec<ChallengeInfo>,
     db_conn: DbConnection
 }
 
-pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>, db_conn: DbConnection) {
+pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<CtrlMsg>, db_conn: DbConnection) {
     let (notifier_sender, my_receiver) : (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
     let ctx = FlagReceiverCtx {
         sender: my_sender,
@@ -66,25 +66,26 @@ pub(crate) fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>
 
 fn flag_receiver_loop(mut ctx: FlagReceiverCtx) {
     loop {
-        let serialized_data = ctx.listener.recv().expect("flag receiver channel communication exited");
+
+        let cmd: FlagReceiverCommand = serde_json::from_slice(
+            ctx.listener.recv()
+                        .expect("deployer channel communication exited")
+                        .as_slice()
+        ).expect("deserialize failed");
         println!("flag received recv()");
-        let data = deserialize_data(&serialized_data);
-        match data.get("cmd").expect("missing cmd").as_str() {
 
-            "flag_info" => if let Err(err) = cmd_flag_info(&mut ctx, &data) {
-                todo!("handle!")
+        match cmd {
+            FlagReceiverCommand::CleanUpCmd(args) => if let Err(err) = cmd_cleanup(&mut ctx, args) {
+                todo!("handle")
             },
-
-            "flag_submit" => if let Err(err) = cmd_flag_submit(&mut ctx, &data) {
-                todo!("handle!")
+            FlagReceiverCommand::FlagSubmitCmd(args) => if let Err(err) = cmd_flag_submit(&mut ctx, args) {
+                todo!("handle")
             },
-
-            "cleanup" => if let Err(err) = cmd_cleanup(&mut ctx, &data) {
-                todo!("handle!")
+            FlagReceiverCommand::FlagInfoCmd(args) => if let Err(err) = cmd_flag_info(&mut ctx, args) {
+                todo!("handle")
             },
-
             _ => panic!("unknown cmd")
-        };
+        }
     }
 }
 
@@ -105,25 +106,25 @@ pub async fn handle_submission(slaves: web::Data<NotifierComms>, path: web::Path
     }
 
     let submitted_flag = &path.0;
-    
-    let target_module = String::from_str("flag_receiver").unwrap();
-    let data = craft_type_notify_message(&target_module, &["flag_submit", submitted_flag, username]);
 
-    slaves.notify(target_module, data);
+    let msg = CtrlMsg::FlagReceiver(
+        crate::notifier::FlagReceiverCommand::FlagSubmitCmd(
+            FlagSubmitCmdArgs {
+                flag: submitted_flag.to_string(),
+                submit_by: username.to_string()
+            }
+        )
+    );
+
+    slaves.notify(msg);
     return Ok(HttpResponse::Ok().body(format!("flag submitted successfully")));
 }
 
-fn cmd_flag_info(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+fn cmd_flag_info(ctx: &mut FlagReceiverCtx, args: FlagInfoCmdArgs) -> Result<(), Error> {
 
-    let challenge_name = data.get("challenge_name")
-                                            .ok_or(Error::FlagInfo(
-                                                String::from("missing challenge name")
-                                            ))?.to_owned();
+    let challenge_name = args.challenge_name;
 
-    let challenge_flag = data.get("flag")
-                                    .ok_or(Error::FlagInfo(
-                                        String::from("missing challenge flag")
-                                    ))?.to_owned();
+    let challenge_flag = args.flag;
 
     ctx.challenge_infos.push(
         ChallengeInfo { 
@@ -134,17 +135,11 @@ fn cmd_flag_info(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) -> Res
     Ok(())
 }
 
-fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
-    let submitted_flag = data.get("flag")
-                                    .ok_or(Error::FlagSubmit(
-                                        String::from("missing flag")
-                                    ))?.to_owned();
+fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, args: FlagSubmitCmdArgs) -> Result<(), Error> {
+    let submitted_flag = args.flag;
 
 
-    let username = data.get("submit_by")
-                            .ok_or(Error::FlagSubmit(
-                                String::from("missing username")
-                            ))?.to_owned();
+    let username = args.submit_by;
 
     let rt = Runtime::new().expect("failed creating tokio runtime");
 
@@ -180,12 +175,9 @@ fn cmd_flag_submit(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) -> R
     Ok(())
 }
 
-fn cmd_cleanup(ctx: &mut FlagReceiverCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+fn cmd_cleanup(ctx: &mut FlagReceiverCtx, args: CleanUpCmdArgs) -> Result<(), Error> {
 
-    let challenge_name = data.get("challenge_name")
-                                    .ok_or(Error::CleanUp(
-                                        String::from("missing challenge name")
-                                    ))?.to_owned();
+    let challenge_name = args.challenge_name;
 
     ctx.challenge_infos.retain(|challenge| {
         challenge.challenge_name != challenge_name

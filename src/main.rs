@@ -2,7 +2,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 
 use actix_web::{App, HttpServer, web};
 use database::user::UserInstance;
-use notifier::{Notifier, NotifierComms};
+use notifier::{CtrlMsg, Notifier, NotifierComms};
 use actix_files;
 use dotenv::dotenv;
 
@@ -20,7 +20,7 @@ mod utils;
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
 
-    let (slave_sender, listen_master): (Sender<(String, Vec<u8>)>, Receiver<(String, Vec<u8>)>) = mpsc::channel();
+    let (slave_sender, listen_master): (Sender<CtrlMsg>, Receiver<CtrlMsg>) = mpsc::channel();
     let mut slaves = NotifierComms {
         comm_infos: Vec::new()
     };

@@ -1,10 +1,10 @@
-use std::{collections::HashMap, fmt::Display, fs::File, io::Write, process::Command, str::FromStr, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
+use std::{fmt::Display, fs::File, io::Write, process::Command, sync::mpsc::{self, Receiver, Sender}, thread::spawn};
 
 use rand::Rng;
 use uuid::Uuid;
 use tokio::runtime::Runtime;
 
-use crate::{database::DbConnection, notifier::{self, craft_type_notify_message, NotifierCommInfo}, Notifier};
+use crate::{database::DbConnection, notifier::{self, CleanUpCmdArgs, CtrlMsg, DeployCmdArgs, DeployerCommand, DestroyCmdArgs, EnqueueCmdArgs, FlagInfoCmdArgs, NotifierCommInfo, PublicCmdArgs}, Notifier};
 
 #[derive(Clone)]
 struct Challenge {
@@ -44,7 +44,7 @@ impl std::error::Error for Error {}
 
 struct DeployerCtx {
     // main comm channel
-    sender: Sender<(String, Vec<u8>)>,
+    sender: Sender<CtrlMsg>,
     listener: Receiver<Vec<u8>>,
     
     db_conn: DbConnection,
@@ -62,7 +62,7 @@ impl DeployerCtx {
     }
 }
 
-pub fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>, db_conn: DbConnection) {
+pub fn init(notifier: &mut Notifier, my_sender: Sender<CtrlMsg>, db_conn: DbConnection) {
     let (notifier_sender, my_receiver) : (Sender<Vec<u8>>, Receiver<Vec<u8>>) = mpsc::channel();
     let ctx = DeployerCtx {
         sender: my_sender,
@@ -87,16 +87,20 @@ pub fn init(notifier: &mut Notifier, my_sender: Sender<(String, Vec<u8>)>, db_co
 
 fn deployer_loop(mut ctx: DeployerCtx) {
     loop {
-        let serialized_data = ctx.listener.recv().expect("deployer channel communication exited");
-        let data = deserialize_data(&serialized_data);
-        match data.get("cmd").expect("missing cmd").as_str() {
-            "deploy" => if let Err(err) = cmd_deploy(&mut ctx, &data) {
+        let cmd: DeployerCommand = serde_json::from_slice(
+            ctx.listener.recv()
+                        .expect("deployer channel communication exited")
+                        .as_slice()
+        ).expect("deserialize failed");
+        
+        match cmd {
+            DeployerCommand::DeployCmd(args) => if let Err(err) = cmd_deploy(&mut ctx, args) {
                 todo!("handle!")
             },
-            "destroy" => if let Err(err) = cmd_destroy(&mut ctx, &data) {
+            DeployerCommand::DestroyCmd(args) => if let Err(err) = cmd_destroy(&mut ctx, args) {
                 todo!("handle!")
             },
-            "public" => if let Err(err) = cmd_public(&mut ctx, &data) {
+            DeployerCommand::PublicCmd(args) => if let Err(err) = cmd_public(&mut ctx, args) {
                 todo!("handle!")
             }
             _ => panic!("unknown cmd")
@@ -104,22 +108,15 @@ fn deployer_loop(mut ctx: DeployerCtx) {
     }
 }
 
-fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+fn cmd_deploy(ctx: &mut DeployerCtx, args: DeployCmdArgs) -> Result<(), Error> {
 
-    let challenge_filename = data.get("challenge_filename")
-                                                .ok_or(Error::Deploy(
-                                                    String::from("invalid challenge filename")
-                                                ))?.to_owned();
+    let challenge_filename = args.challenge_name;
 
-    let start_time = data.get("start_time")
-                                                .ok_or(Error::Deploy(
-                                                    String::from("invalid start time")
-                                                ))?;
+    let start_time = args.start_time;
 
-    let interval = data.get("interval")
-                                                .ok_or(Error::Deploy(
-                                                    String::from("invalid interval")
-                                                ))?;
+    let interval = args.interval;
+
+    let pre_announce = args.pre_announce;
 
     unpack_challenge(&challenge_filename)?;
     let flag = generate_challenge_flag(&challenge_filename)?;
@@ -139,18 +136,36 @@ fn cmd_deploy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(),
     }
 
     let container_id = deploy_challenge(&challenge_filename, &challenge_image, port)?;
-    let target_module = String::from("flag_receiver");
-    let cmd = String::from("flag_info");
-    let data = notifier::craft_type_notify_message(&target_module, &[&cmd, &challenge_filename.to_string(), &flag]);
-    ctx.sender.send((target_module, data)).expect("deployer cannot send");
+
+    let msg = CtrlMsg::FlagReceiver(
+        notifier::FlagReceiverCommand::FlagInfoCmd(
+            FlagInfoCmdArgs {
+                challenge_name : challenge_filename.clone(),
+                flag
+            }
+        )
+    );
+
+    ctx.sender.send(msg).expect("deployer cannot send");
+
     let conn_string = format!("nc localhost {}", port);
     rt.block_on(ctx.db_conn.set_challenge_connection_string(challenge_filename.to_string(), conn_string));
     rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), true));
 
     {
-        let target_module = String::from("timer");
-        let data = craft_type_notify_message(&target_module, &["enqueue", &challenge_filename.to_string(), &start_time.to_string(), &interval.to_string()]);
-        ctx.sender.send((target_module, data)).expect("deployer cannot send");
+
+        let msg = CtrlMsg::Timer(
+            notifier::TimerCommand::EnqueueCmd(
+                EnqueueCmdArgs {
+                    challenge_name: challenge_filename.clone(),
+                    public_time: start_time,
+                    interval,
+                    pre_announce
+                }
+            )
+        );
+
+        ctx.sender.send(msg).expect("deployer cannot send");
     }
 
     ctx.running_deployments.push(
@@ -197,12 +212,9 @@ fn set_port_access(status: PortAccess) -> Result<(), Error> {
     Ok(())
 }
 
-fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+fn cmd_destroy(ctx: &mut DeployerCtx, args: DestroyCmdArgs) -> Result<(), Error> {
 
-    let challenge_filename = data.get("challenge_filename")
-                                        .ok_or(Error::Deploy(
-                                            String::from("invalid challenge filename")
-                                        ))?.to_owned();
+    let challenge_filename = args.challenge_name;
 
     let challenge = |challenge_name| -> Option<&Challenge> {
         for challenge in &ctx.running_deployments {
@@ -227,10 +239,15 @@ fn cmd_destroy(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<()
     let rt = Runtime::new().expect("failed creating tokio runtime");
     destroy_challenge(challenge)?;
 
-    let target_module = String::from("flag_receiver");
-    let data = notifier::craft_type_notify_message(&target_module, &["cleanup", &challenge_filename]);
+    let msg = CtrlMsg::FlagReceiver(
+        notifier::FlagReceiverCommand::CleanUpCmd(
+            CleanUpCmdArgs {
+                challenge_name: challenge_filename.clone()
+            }
+        )
+    );
 
-    ctx.sender.send((target_module, data)).expect("deployer cannot send");
+    ctx.sender.send(msg).expect("deployer cannot send");
 
     ctx.running_deployments.retain(|challenge| challenge.challenge_filename != challenge_filename);
     rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), false));
@@ -261,11 +278,6 @@ fn destroy_challenge(challenge: &Challenge) -> Result<(), Error> {
     }
 
     Ok(())
-}
-
-fn deserialize_data(serialized_data: &Vec<u8>) -> HashMap<&str, String> {
-    let data: HashMap<&str, String> = serde_json::from_slice(serialized_data.as_slice()).expect("deserialize failed!");
-    return data;
 }
 
 fn unpack_challenge(challenge_filename: &String) -> Result<(), Error> {
@@ -327,13 +339,9 @@ fn deploy_challenge(challenge_filename: &String, challenge_image: &String, port:
     Ok(container_id)
 }
 
-fn cmd_public(ctx: &mut DeployerCtx, data: &HashMap<&str, String>) -> Result<(), Error> {
+fn cmd_public(ctx: &mut DeployerCtx, args: PublicCmdArgs) -> Result<(), Error> {
 
-    let challenge_name = data.get("challenge_filename")
-                                        .ok_or(Error::PublicChallenge(
-                                            String::from("invalid challenge filename")
-                                        ))?.to_owned();
-
+    let challenge_name = args.challenge_name;
 
     for challenge in &mut ctx.running_deployments {
         if challenge.challenge_filename == challenge_name && !challenge.running {
