@@ -73,9 +73,9 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, db_conn: 
     let pre_announce = match pre_announce_header.map(|x| i128::from_str_radix(x.to_str().unwrap(), 10)) {
         Some(time) => match time {
             Ok(epoch) => epoch-MAGIC_TIME,
-            _ => return Ok(HttpResponse::BadRequest().body("Invalid interval"))
+            _ => return Ok(HttpResponse::BadRequest().body("Invalid pre-announce time"))
         },
-        None => return Ok(HttpResponse::BadRequest().body("Missing interval"))
+        None => return Ok(HttpResponse::BadRequest().body("Missing pre-announce time"))
     };
 
     if !is_time_schedule_valid(start_time, end_time) {
