@@ -51,25 +51,35 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, db_conn: 
     }
 
     let start_time_header = req.headers().get("X-start");
-    let end_time_header = req.headers().get("X-end");
+    let interval_header = req.headers().get("X-interval");
+    let pre_announce_header =  req.headers().get("X-preannounce");
 
-    let start_time = match start_time_header {
-        Some(time) => match i128::from_str_radix(time.to_str().unwrap(), 10) {
+    let start_time = match start_time_header.map(|x| i128::from_str_radix(x.to_str().unwrap(), 10)) {
+        Some(time) => match time {
             Ok(epoch) => epoch-MAGIC_TIME,
-            Err(_) => return Ok(HttpResponse::BadRequest().body(format!("Invalid start time")))
+            _ => return Ok(HttpResponse::BadRequest().body("Invalid start time"))
         },
-        None => return Ok(HttpResponse::BadRequest().body(format!("Missing start time")))
+        None => return Ok(HttpResponse::BadRequest().body("Missing start time"))
     };
 
-    let end_time = match end_time_header {
-        Some(time) => match i128::from_str_radix(time.to_str().unwrap(), 10) {
+    let interval = match interval_header.map(|x| i128::from_str_radix(x.to_str().unwrap(), 10)) {
+        Some(time) => match time {
             Ok(epoch) => epoch-MAGIC_TIME,
-            Err(_) => return Ok(HttpResponse::BadRequest().body(format!("Invalid end time")))
+            _ => return Ok(HttpResponse::BadRequest().body("Invalid interval"))
         },
-        None => return Ok(HttpResponse::BadRequest().body(format!("Missing end time")))
+        None => return Ok(HttpResponse::BadRequest().body("Missing interval"))
+    };
+
+    let pre_announce = match pre_announce_header.map(|x| i128::from_str_radix(x.to_str().unwrap(), 10)) {
+        Some(time) => match time {
+            Ok(epoch) => epoch-MAGIC_TIME,
+            _ => return Ok(HttpResponse::BadRequest().body("Invalid interval"))
+        },
+        None => return Ok(HttpResponse::BadRequest().body("Missing interval"))
     };
 
     if !is_time_schedule_valid(start_time, end_time) {
+        todo!("need changes");
         return Ok(get_error("Please adjust start_time/end_time"));
     }
 
@@ -90,8 +100,8 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, db_conn: 
                 crate::notifier::DeployerCommand::DeployCmd(DeployCmdArgs {
                     challenge_name: filename.to_string(),
                     start_time,
-                    interval: end_time,
-                    pre_announce: todo!("handle this!")
+                    interval,
+                    pre_announce
                 })
             );
             slaves.notify(msg);

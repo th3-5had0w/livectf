@@ -8,7 +8,7 @@ use crate::{database::DbConnection, notifier::{self, CleanUpCmdArgs, CtrlMsg, De
 
 #[derive(Clone)]
 struct Challenge {
-    challenge_filename: String,
+    challenge_name: String,
     challenge_image: String,
     container_id: String,
     port: u16,
@@ -110,7 +110,7 @@ fn deployer_loop(mut ctx: DeployerCtx) {
 
 fn cmd_deploy(ctx: &mut DeployerCtx, args: DeployCmdArgs) -> Result<(), Error> {
 
-    let challenge_filename = args.challenge_name;
+    let challenge_name = args.challenge_name;
 
     let start_time = args.start_time;
 
@@ -118,9 +118,9 @@ fn cmd_deploy(ctx: &mut DeployerCtx, args: DeployCmdArgs) -> Result<(), Error> {
 
     let pre_announce = args.pre_announce;
 
-    unpack_challenge(&challenge_filename)?;
-    let flag = generate_challenge_flag(&challenge_filename)?;
-    let challenge_image = build_challenge(&challenge_filename)?;                                                
+    unpack_challenge(&challenge_name)?;
+    let flag = generate_challenge_flag(&challenge_name)?;
+    let challenge_image = build_challenge(&challenge_name)?;                                                
 
     let rt = Runtime::new().expect("failed creating tokio runtime");
 
@@ -135,12 +135,12 @@ fn cmd_deploy(ctx: &mut DeployerCtx, args: DeployCmdArgs) -> Result<(), Error> {
         }
     }
 
-    let container_id = deploy_challenge(&challenge_filename, &challenge_image, port)?;
+    let container_id = deploy_challenge(&challenge_name, &challenge_image, port)?;
 
     let msg = CtrlMsg::FlagReceiver(
         notifier::FlagReceiverCommand::FlagInfoCmd(
             FlagInfoCmdArgs {
-                challenge_name : challenge_filename.clone(),
+                challenge_name : challenge_name.clone(),
                 flag
             }
         )
@@ -149,15 +149,15 @@ fn cmd_deploy(ctx: &mut DeployerCtx, args: DeployCmdArgs) -> Result<(), Error> {
     ctx.sender.send(msg).expect("deployer cannot send");
 
     let conn_string = format!("nc localhost {}", port);
-    rt.block_on(ctx.db_conn.set_challenge_connection_string(challenge_filename.to_string(), conn_string));
-    rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), true));
+    rt.block_on(ctx.db_conn.set_challenge_connection_string(challenge_name.to_string(), conn_string));
+    rt.block_on(ctx.db_conn.set_challenge_running(challenge_name.to_string(), true));
 
     {
 
         let msg = CtrlMsg::Timer(
             notifier::TimerCommand::EnqueueCmd(
                 EnqueueCmdArgs {
-                    challenge_name: challenge_filename.clone(),
+                    challenge_name: challenge_name.clone(),
                     public_time: start_time,
                     interval,
                     pre_announce
@@ -170,7 +170,7 @@ fn cmd_deploy(ctx: &mut DeployerCtx, args: DeployCmdArgs) -> Result<(), Error> {
 
     ctx.running_deployments.push(
         Challenge { 
-            challenge_filename,
+            challenge_name,
             challenge_image,
             container_id,
             port,
@@ -214,19 +214,19 @@ fn set_port_access(status: PortAccess) -> Result<(), Error> {
 
 fn cmd_destroy(ctx: &mut DeployerCtx, args: DestroyCmdArgs) -> Result<(), Error> {
 
-    let challenge_filename = args.challenge_name;
+    let challenge_name = args.challenge_name;
 
     let challenge = |challenge_name| -> Option<&Challenge> {
         for challenge in &ctx.running_deployments {
-            if challenge_name == &challenge.challenge_filename {
+            if challenge_name == &challenge.challenge_name {
                 return Some(challenge)
             }
         }
         None
-    }(&challenge_filename);
+    }(&challenge_name);
     if challenge.is_none() {
         return Err(Error::Destroy(
-            format!("invalid challenge {}", &challenge_filename)
+            format!("invalid challenge {}", &challenge_name)
         ));
     }
 
@@ -242,15 +242,15 @@ fn cmd_destroy(ctx: &mut DeployerCtx, args: DestroyCmdArgs) -> Result<(), Error>
     let msg = CtrlMsg::FlagReceiver(
         notifier::FlagReceiverCommand::CleanUpCmd(
             CleanUpCmdArgs {
-                challenge_name: challenge_filename.clone()
+                challenge_name: challenge_name.clone()
             }
         )
     );
 
     ctx.sender.send(msg).expect("deployer cannot send");
 
-    ctx.running_deployments.retain(|challenge| challenge.challenge_filename != challenge_filename);
-    rt.block_on(ctx.db_conn.set_challenge_running(challenge_filename.to_string(), false));
+    ctx.running_deployments.retain(|challenge| challenge.challenge_name != challenge_name);
+    rt.block_on(ctx.db_conn.set_challenge_running(challenge_name.to_string(), false));
     Ok(())
 }
 
@@ -344,7 +344,7 @@ fn cmd_public(ctx: &mut DeployerCtx, args: PublicCmdArgs) -> Result<(), Error> {
     let challenge_name = args.challenge_name;
 
     for challenge in &mut ctx.running_deployments {
-        if challenge.challenge_filename == challenge_name && !challenge.running {
+        if challenge.challenge_name == challenge_name && !challenge.running {
             set_port_access(PortAccess::Add(challenge.port))?;
             challenge.running = true;
         }
