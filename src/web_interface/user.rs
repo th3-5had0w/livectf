@@ -1,4 +1,4 @@
-use actix_web::cookie::time::OffsetDateTime;
+use actix_web::cookie::time::{Duration, OffsetDateTime};
 use actix_web::http::header;
 use regex::Regex;
 use std::collections::BTreeMap;
@@ -58,19 +58,17 @@ pub async fn api_user_login(db_conn: web::Data<DbConnection>, form: web::Form<Lo
         return Ok(get_error("Cannot sign JWT"));
     }
 
-    let c = Cookie::build("token", "jfpzihnfiobjgnopka")
-        // .domain("localhost")
+    let c = Cookie::build("auth", jwt)
         .path("/")
         .http_only(true)
-        .expires(OffsetDateTime::now_utc())
+        .expires(OffsetDateTime::now_utc() + Duration::weeks(1))
+        .same_site(actix_web::cookie::SameSite::Strict)
         .finish();
 
-
-    let resp = HttpResponse::PermanentRedirect()
-        .content_type(ContentType::json())
+    let resp = HttpResponse::Ok()
         .cookie(c)
-        .append_header((header::LOCATION, "/"))
-        .finish();
+        .append_header(header::ContentType(header::ContentType::html().0))
+        .body("<meta http-equiv=\"refresh\" content=\"1; url=/\">");
     
     return Ok(resp);
 }

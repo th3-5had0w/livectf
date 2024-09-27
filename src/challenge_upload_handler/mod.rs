@@ -78,9 +78,9 @@ pub(crate) async fn handle_challenge(slaves: web::Data<NotifierComms>, db_conn: 
         None => return Ok(HttpResponse::BadRequest().body("Missing pre-announce time"))
     };
 
-    if !is_time_schedule_valid(start_time, end_time) {
-        todo!("need changes");
-        return Ok(get_error("Please adjust start_time/end_time"));
+    if !is_time_schedule_valid(start_time, interval) {
+        // todo!("need changes");
+        return Ok(get_error("Please adjust start_time/interval"));
     }
 
     while let Some(mut field) = payload.try_next().await? {

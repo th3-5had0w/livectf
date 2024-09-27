@@ -71,7 +71,7 @@ pub fn is_challenge_exists(challenge_name: &String) -> bool {
     return false;
 }
 
-pub fn is_time_schedule_valid(start_time: i128, end_time: i128) -> bool {
+pub fn is_time_schedule_valid(start_time: i128, interval: i128) -> bool {
     let now_epoch = i128::try_from(
         SystemTime::now().duration_since(UNIX_EPOCH).expect("back to the future!!!").as_secs()
     ).expect("Cannot convert current epoch to i128");
@@ -84,7 +84,7 @@ pub fn is_time_schedule_valid(start_time: i128, end_time: i128) -> bool {
         return false;
     }
 
-    if end_time < start_time + MAX_TIME_CHALLENGE {
+    if interval < MAX_TIME_CHALLENGE {
         return false;
     }
 
@@ -144,21 +144,20 @@ pub async fn get_user_score(db_conn: DbConnection, user_id: i32) -> u64 {
     return total_score;
 }
 
-pub fn read_dir_to_decompressed_entries(dir: fs::ReadDir) -> Vec<DecompressedEntry> {
+pub fn read_dir_to_decompressed_entries(dir: fs::ReadDir, parent: String) -> Vec<DecompressedEntry> {
     let mut result: Vec<DecompressedEntry> = vec![];
     for entry in dir {
         let entry = entry.unwrap();
         if entry.file_type().unwrap().is_dir() {
-            result.extend(read_dir_to_decompressed_entries(fs::read_dir(entry.path()).unwrap()))
+            result.extend(read_dir_to_decompressed_entries(fs::read_dir(entry.path()).unwrap(), format!("{}/{}", parent, entry.file_name().into_string().unwrap())))
         } else {
             let filename = entry.file_name().into_string().unwrap();
             let mut f = fs::File::open(entry.path()).unwrap();
             let mut content  = vec![];
             f.read_to_end(content.as_mut()).unwrap();
-
                 
             result.push(DecompressedEntry {
-                filename,
+                filename: format!("{}/{}", parent.to_string(), filename.as_str()),
                 is_public: false,
                 content
             });

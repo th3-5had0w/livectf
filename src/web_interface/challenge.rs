@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use base64::engine::general_purpose::STANDARD;
 use tempdir::TempDir;
 
-use crate::notifier::{NotifierComms, craft_type_notify_message};
+use crate::notifier::{CtrlMsg, DeployCmdArgs, DestroyCmdArgs, NotifierComms};
 use crate::web_interface::{get_jwt_claims, get_error, success, unauthorized, forbiden};
 use crate::utils::{is_time_schedule_valid, MAGIC_TIME, is_challenge_exists, check_if_challenge_is_up,read_dir_to_decompressed_entries, unpack};
 
@@ -51,7 +51,8 @@ pub async fn api_challenge_action(slaves: web::Data<NotifierComms>, req: HttpReq
             }
 
             let start_time_header = req.headers().get("X-start");
-            let end_time_header = req.headers().get("X-end");
+            let interval_header = req.headers().get("X-interval");
+            let pre_announce_header =  req.headers().get("X-preannounce");
 
             let start_time = match start_time_header {
                 Some(time) => match i128::from_str_radix(time.to_str().unwrap(), 10) {
@@ -61,21 +62,38 @@ pub async fn api_challenge_action(slaves: web::Data<NotifierComms>, req: HttpReq
                 None => return Ok(get_error("Missing start time"))
             };
 
-            let end_time = match end_time_header {
+            let interval = match interval_header {
                 Some(time) => match i128::from_str_radix(time.to_str().unwrap(), 10) {
                     Ok(epoch) => epoch-MAGIC_TIME,
-                    Err(_) => return Ok(get_error("Invalid end time"))
+                    Err(_) => return Ok(get_error("Invalid interval"))
                 },
-                None => return Ok(get_error("Missing end time"))
+                None => return Ok(get_error("Missing interval"))
             };
 
-            if !is_time_schedule_valid(start_time, end_time) {
+            let pre_announce = match pre_announce_header.map(|x| i128::from_str_radix(x.to_str().unwrap(), 10)) {
+                Some(time) => match time {
+                    Ok(epoch) => epoch-MAGIC_TIME,
+                    _ => return Ok(HttpResponse::BadRequest().body("Invalid pre-announce time"))
+                },
+                None => return Ok(HttpResponse::BadRequest().body("Missing pre-announce time"))
+            };
+
+            if !is_time_schedule_valid(start_time, interval) {
                 return Ok(get_error("Please adjust start_time/end_time"));
             }
 
-            let target_module = String::from("deployer");
-            let data = craft_type_notify_message(&target_module, &["schedule", challenge_name, &start_time.to_string(), &end_time.to_string()]);
-            slaves.notify(target_module, data);
+            // let target_module = String::from("deployer");
+            // let data = craft_type_notify_message(&target_module, &["schedule", challenge_name, &start_time.to_string(), &end_time.to_string()]);
+            
+            let msg = CtrlMsg::Deployer(
+                crate::notifier::DeployerCommand::DeployCmd(DeployCmdArgs {
+                    challenge_name: challenge_name.to_string(),
+                    start_time,
+                    interval,
+                    pre_announce
+                })
+            );
+            slaves.notify(msg);
             return Ok(success("Challenge scheduled"))
 
         },
@@ -86,10 +104,13 @@ pub async fn api_challenge_action(slaves: web::Data<NotifierComms>, req: HttpReq
                 return Ok(get_error("Challenge is not started"));
             }
 
-            let target_module = String::from("deployer");
-            let data = craft_type_notify_message(&target_module, &["destroy", &challenge_name]);
-            slaves.notify(target_module, data);
+            let msg = CtrlMsg::Deployer(
+                crate::notifier::DeployerCommand::DestroyCmd(DestroyCmdArgs {
+                    challenge_name: challenge_name.to_string(),
+                })
+            );
 
+            slaves.notify(msg);
             return Ok(success("Challenge destroyed"));
         },
         _ => Ok(get_error("Unknown action"))
@@ -119,8 +140,7 @@ pub async fn api_decompress_challenge(form: web::Form<DecompressForm>) -> Result
 
             unpack(&tmp_tarball, &tmp_extracted_dir).unwrap();
 
-            let resp_entities: Vec<DecompressedEntry> = read_dir_to_decompressed_entries(fs::read_dir(tmp_extracted_dir.to_owned()).unwrap());
-            println!("{}", tmp_extracted_dir);
+            let resp_entities: Vec<DecompressedEntry> = read_dir_to_decompressed_entries(fs::read_dir(tmp_extracted_dir.to_owned() + "/a/chall").unwrap(), "/chall".to_string());
             
             let resp: HttpResponse = HttpResponse::Ok()
                 .content_type(ContentType::json())

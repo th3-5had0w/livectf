@@ -115,7 +115,6 @@ function _arrayBufferToBase64( buffer ) {
 
 function parseChallenge(ev) {
     ev.preventDefault();
-    ev.target.style.opacity = 1
     ev.target.style.display = "none";
     let fileReader = new FileReader();
 
@@ -134,20 +133,59 @@ function parseChallenge(ev) {
         resp = await resp.json()
 
         if (resp.length > 0) {
-            document.querySelector(".upload-info").style.display = "block"
-            
             localStorage.setItem("cached_upload", JSON.stringify(resp))
+            const sandboxedIfrm = document.createElement("iframe");
+            sandboxedIfrm.sandbox = "allow-scripts";
+
+            const uploadInfo = document.createElement("div");
+            uploadInfo.classList.add("upload-info");
+
+            const dynamic_css = `
+            @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
+
+            body {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                font-family: "Roboto Mono", monospace;
+            }
+
+            .upload-entry {
+                display: flex;
+                padding: 0 15px 0 15px;
+                align-items: center;
+                justify-content: space-between;
+                width: 300px;
+                border: 3px dashed black;
+                margin: 20px;
+            }
+
+            .upload-entry h3 {
+                font-size: 0.8rem;
+            }
+
+            .visibility-form {
+                display: flex;
+                flex-direction: column;
+                border: none;
+            }`;
+            
             for (const entry of resp) {
-                document.querySelector(".upload-info").innerHTML += `
+                uploadInfo.innerHTML += `
                 <div class="upload-entry"> 
                     <h3 class="upload-filename">${entry.filename}</h3>
                     <fieldset class="visibility-form">
-                        <input type="radio" id="public" value="public" name="visibility">
+                        <input type="radio" id="public" value="public" name="visibility_${entry.filename}">
                         <label for="public">public</label>
-                        <input type="radio" id="private" value="private" name="visibility">
+                        <input type="radio" id="private" value="private" name="visibility_${entry.filename}" checked>
                         <label for="private">private</label>
                     </fieldset>
                 </div>`;
+
+                sandboxedIfrm.srcdoc = `<style>\n${dynamic_css}\n</style>` + uploadInfo.outerHTML;
+                sandboxedIfrm.width = "500px";
+                sandboxedIfrm.height = "500px";
+                document.querySelector(".form-wrapper").appendChild(sandboxedIfrm)
             }
         }
     }

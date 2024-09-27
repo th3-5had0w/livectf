@@ -1,3 +1,6 @@
 /target
 RELEASE/archives/*
 RELEASE/attachments/*
+RELEASE/.env
+.env
+target

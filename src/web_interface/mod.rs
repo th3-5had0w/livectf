@@ -430,10 +430,29 @@ pub async fn admin_index(page: web::Query<PaginationQuery>, db_conn: web::Data<D
                                             p { "Drag your challenge archive here" }
                                         }
 
-                                        div class="upload-info" {
-                                            
+                                        div class="challenge-upload-form" {
+                                            input type="date" name="start-date" id="start-date" {}
+                                            input type="time" name="start-time" id="start-time" {}
+                                            select name="interval" {
+                                                option value="1-day" { "1 day" }
+                                                option value="2-day" { "2 day" }
+                                                option value="3-day" { "3 day" }
+                                                option value="4-day" { "4 day" }
+                                                option value="5-day" { "5 day" }
+                                                option value="6-day" { "6 day" }
+                                                option value="1-week" { "1 week" }
+                                                option value="2-week" { "2 weeks" }
+                                                option value="3-week" { "3 weeks" }
+                                                option value="1-month" { "1 month" }
+                                                option value="2-month" { "2 months" }
+                                            }
+                                            button id="upload-challenge" { 
+                                                span {
+                                                    "upload" 
+                                                } 
+                                            }
                                         }
-                                    }
+                                    } 
                                 }
                             } @else if path == CHALLENGE_SCHEDULE_PATH {
                                 h1 id="section-title" { "Challenge schedule" }
